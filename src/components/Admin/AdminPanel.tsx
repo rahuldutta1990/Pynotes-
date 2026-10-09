@@ -27,13 +27,15 @@ import {
   Sparkles,
   ArrowLeft,
   LogOut,
-  ShieldCheck
+  ShieldCheck,
+  Mail
 } from 'lucide-react';
 import {
   validateProductForm,
   validateStoreSettings,
   validateGstin
 } from '../../utils/validation';
+import { subscribeToNewsletterSubscribers } from '../../services/storeService';
 
 interface AdminPanelProps {
   isStandalone?: boolean;
@@ -68,8 +70,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ isStandalone = false }) 
   const [settingsFormError, setSettingsFormError] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<
-    'dashboard' | 'orders' | 'cod-call-list' | 'products' | 'stock' | 'settings' | 'issues'
+    'dashboard' | 'orders' | 'cod-call-list' | 'products' | 'stock' | 'settings' | 'issues' | 'newsletter'
   >('dashboard');
+
+  // Newsletter subscribers state
+  const [subscribers, setSubscribers] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (activeTab === 'newsletter') {
+      const unsubscribe = subscribeToNewsletterSubscribers((data) => {
+        setSubscribers(data);
+      });
+      return () => unsubscribe();
+    }
+  }, [activeTab]);
 
   // Orders filters
   const [orderStatusFilter, setOrderStatusFilter] = useState<string>('All');
@@ -448,6 +462,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ isStandalone = false }) 
             >
               <AlertTriangle className="w-3.5 h-3.5" />
               <span>Claims ({issueReports.length})</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('newsletter')}
+              className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'newsletter'
+                  ? 'bg-[#12A5B0] text-white shadow-sm'
+                  : 'text-[#CED7DF] hover:bg-[#0B3561]'
+              }`}
+            >
+              <Mail className="w-3.5 h-3.5" />
+              <span>Newsletter ({subscribers.length})</span>
             </button>
           </div>
 
@@ -1579,6 +1605,63 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ isStandalone = false }) 
                 ) : (
                   <div className="text-center py-12 text-[#9DAEC0] text-xs">
                     No open 48-hour claims. All parcels reported in good condition.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ===================== TAB 8: NEWSLETTER SUBSCRIBERS ===================== */}
+          {activeTab === 'newsletter' && (
+            <div className="space-y-4">
+              <div className="bg-white p-6 rounded-3xl border border-[#CED7DF] shadow-xs space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#E7EBEF] pb-4 gap-2">
+                  <div>
+                    <h3 className="text-sm font-extrabold text-[#0B3561] uppercase font-heading">
+                      Newsletter Marketing Email List
+                    </h3>
+                    <p className="text-xs text-[#6D86A0]">
+                      Active subscribers captured through the storefront footer signup for future marketing updates
+                    </p>
+                  </div>
+                  <div className="bg-[#DDF3F4] text-[#12A5B0] font-bold text-xs px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+                    <Mail className="w-3.5 h-3.5" />
+                    <span>{subscribers.length} Emails Registered</span>
+                  </div>
+                </div>
+
+                {subscribers.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-xs font-body divide-y divide-[#CED7DF] text-left">
+                      <thead>
+                        <tr className="bg-[#F7FAFC] text-[#6D86A0] uppercase font-bold text-[10px] font-heading">
+                          <th className="py-3 px-4">Index</th>
+                          <th className="py-3 px-4">Email Address</th>
+                          <th className="py-3 px-4">Registered Date</th>
+                          <th className="py-3 px-4">Marketing Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#CED7DF]">
+                        {subscribers.map((sub, i) => (
+                          <tr key={sub.id} className="hover:bg-[#F7FAFC] transition-colors">
+                            <td className="py-3 px-4 text-[#6D86A0] font-mono">{i + 1}</td>
+                            <td className="py-3 px-4 font-bold text-[#0B3561] font-mono">{sub.email}</td>
+                            <td className="py-3 px-4 text-[#6D86A0] font-mono">
+                              {sub.createdAt ? new Date(sub.createdAt).toLocaleString('en-IN') : 'N/A'}
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className="bg-emerald-50 text-emerald-600 border border-emerald-200 font-bold text-[10px] px-2 py-0.5 rounded-full uppercase">
+                                {sub.active ? 'Active Subscriber' : 'Unsubscribed'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="text-center py-12 text-[#9DAEC0] text-xs">
+                    No newsletter signups yet. Subscribers will appear here automatically when they sign up on the storefront.
                   </div>
                 )}
               </div>

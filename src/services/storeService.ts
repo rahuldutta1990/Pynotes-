@@ -448,6 +448,39 @@ export function subscribeToIssueReports(callback: (reports: IssueReport[]) => vo
   );
 }
 
+// Subscribe newsletter email
+export async function subscribeNewsletter(email: string): Promise<void> {
+  const subscriberId = email.replace(/[^a-zA-Z0-9_\-]+/g, '_').toLowerCase();
+  try {
+    await setDoc(doc(db, 'newsletter_subscribers', subscriberId), {
+      email,
+      active: true,
+      createdAt: new Date().toISOString()
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, `newsletter_subscribers/${subscriberId}`);
+  }
+}
+
+// Subscribe to newsletter subscribers list for Admin
+export function subscribeToNewsletterSubscribers(callback: (subscribers: any[]) => void): () => void {
+  const q = collection(db, 'newsletter_subscribers');
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const subscribers: any[] = [];
+      snapshot.forEach(docSnap => {
+        subscribers.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      callback(subscribers);
+    },
+    (err) => {
+      console.warn('Newsletter subscribers snapshot error:', err);
+      callback([]);
+    }
+  );
+}
+
 // Reset store to demo state
 export async function resetDemoStoreData(): Promise<void> {
   try {

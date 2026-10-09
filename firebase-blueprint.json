@@ -105,6 +105,17 @@
         "createdAt": { "type": "string", "description": "Submission ISO timestamp" }
       },
       "required": ["orderId", "customerName", "customerPhone", "description"]
+    },
+    "NewsletterSubscriber": {
+      "title": "NewsletterSubscriber",
+      "description": "User email address signed up for newsletter marketing updates",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "description": "Subscriber contact email address" },
+        "active": { "type": "boolean", "description": "Active subscription status" },
+        "createdAt": { "type": "string", "description": "Signup ISO timestamp" }
+      },
+      "required": ["email", "active", "createdAt"]
     }
   },
   "firestore": {
@@ -127,6 +138,10 @@
     "/issue_reports/{reportId}": {
       "schema": "IssueReport",
       "description": "Customer 48-hour delivery issue claims"
+    },
+    "/newsletter_subscribers/{subscriberId}": {
+      "schema": "NewsletterSubscriber",
+      "description": "Newsletter email subscribers"
     }
   }
 }
