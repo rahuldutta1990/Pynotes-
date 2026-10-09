@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --pynotes-navy: #0B3561;
+    --notes-teal: #12A5B0;
+    --ink-night: #071E38;
+    --margin-mint: #DDF3F4;
+    --paper-white: #F7FAFC;
+    --highlighter: #FFD54A;
+  }
+
+  * {
+    font-family: 'Montserrat', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  body {
+    font-family: 'Montserrat', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: #F7FAFC;
+    color: #071E38;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Montserrat', sans-serif;
+  }
+
+  button, input, select, textarea {
+    font-family: 'Montserrat', sans-serif;
+  }
+}
+
+.font-heading {
+  font-family: 'Montserrat', sans-serif;
+}
+
+.font-body {
+  font-family: 'Montserrat', sans-serif;
+}
+
+.bg-ruled-paper {
+  background-image: linear-gradient(transparent 23px, rgba(11, 53, 97, 0.06) 24px);
+  background-size: 100% 24px;
+}
+
+.bg-dot-grid {
+  background-image: radial-gradient(rgba(11, 53, 97, 0.12) 1.2px, transparent 1.2px);
+  background-size: 18px 18px;
+}
+
+.highlight-mark {
+  background-color: #FFD54A;
+  color: #071E38;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 700;
+}

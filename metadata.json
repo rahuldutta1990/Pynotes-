@@ -1,0 +1,6 @@
+{
+  "name": "Pynotes - Handwritten Coding Notes Store",
+  "description": "Dynamic e-commerce store and admin panel for Pynotes printed handwritten coding notes with live stock sync, smart bundles, Razorpay, COD confirmation, and GST invoicing.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

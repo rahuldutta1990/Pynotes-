@@ -1,0 +1,132 @@
+{
+  "entities": {
+    "Product": {
+      "title": "Product",
+      "description": "Printed handwritten coding book or smart bundle product",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "Title of the subject book or bundle" },
+        "slug": { "type": "string", "description": "URL slug" },
+        "category": { "type": "string", "description": "Subject category" },
+        "regularPrice": { "type": "number", "description": "Original price in INR" },
+        "salePrice": { "type": "number", "description": "Discounted selling price in INR" },
+        "stockQuantity": { "type": "number", "description": "Available physical stock count" },
+        "isBundle": { "type": "boolean", "description": "Whether this is a multi-subject bundle" },
+        "bundledProductIds": { "type": "array", "description": "List of component book IDs for bundles" },
+        "pages": { "type": "number", "description": "Number of printed pages" },
+        "shortDescription": { "type": "string", "description": "Brief description" },
+        "description": { "type": "string", "description": "Full product description" },
+        "coverImage": { "type": "string", "description": "Cover preview image URL or data" },
+        "sampleImages": { "type": "array", "description": "Sample handwritten notes preview pages" },
+        "features": { "type": "array", "description": "List of book feature bullet points" },
+        "hsnCode": { "type": "string", "description": "GST HSN code for printed books (4901)" },
+        "sku": { "type": "string", "description": "Stock Keeping Unit" },
+        "rating": { "type": "number", "description": "Average review rating" },
+        "reviewCount": { "type": "number", "description": "Total customer reviews" },
+        "badge": { "type": "string", "description": "Marketing badge" },
+        "isFeatured": { "type": "boolean", "description": "Show on home page featured grid" }
+      },
+      "required": ["title", "slug", "salePrice", "regularPrice", "stockQuantity"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Customer purchase order with shipping, payment, and tracking details",
+      "type": "object",
+      "properties": {
+        "orderNumber": { "type": "string", "description": "Order identification code" },
+        "customerName": { "type": "string", "description": "Recipient full name" },
+        "customerEmail": { "type": "string", "description": "Customer contact email" },
+        "customerPhone": { "type": "string", "description": "Customer 10-digit mobile number" },
+        "shippingAddress": { "type": "object", "description": "Shipping address details" },
+        "items": { "type": "array", "description": "Ordered line items" },
+        "subtotal": { "type": "number", "description": "Subtotal amount before discounts" },
+        "discountAmount": { "type": "number", "description": "Coupon discount amount" },
+        "couponCode": { "type": "string", "description": "Applied discount coupon code" },
+        "prepaidDiscount": { "type": "number", "description": "Prepaid discount amount" },
+        "shippingFee": { "type": "number", "description": "Shipping fee in INR" },
+        "codFee": { "type": "number", "description": "Cash on delivery fee in INR" },
+        "totalAmount": { "type": "number", "description": "Final payable amount in INR" },
+        "paymentMethod": { "type": "string", "description": "Payment gateway or COD" },
+        "paymentStatus": { "type": "string", "description": "Payment status" },
+        "status": { "type": "string", "description": "Fulfillment status of order" },
+        "codConfirmed": { "type": "boolean", "description": "Whether COD order was verified by phone/WhatsApp" },
+        "trackingNumber": { "type": "string", "description": "Shiprocket / Courier AWB number" },
+        "courier": { "type": "string", "description": "Assigned courier partner" },
+        "trackingEvents": { "type": "array", "description": "Tracking timeline updates" },
+        "invoiceNumber": { "type": "string", "description": "GST tax invoice number" },
+        "createdAt": { "type": "string", "description": "Order placement ISO timestamp" }
+      },
+      "required": ["customerName", "customerPhone", "totalAmount", "paymentMethod", "status"]
+    },
+    "SiteSettings": {
+      "title": "SiteSettings",
+      "description": "Global storefront options and business rules",
+      "type": "object",
+      "properties": {
+        "storeName": { "type": "string", "description": "Store branding name" },
+        "logoUrl": { "type": "string", "description": "URL or data string of the store brand logo" },
+        "announcements": { "type": "array", "description": "Rotating top bar messages" },
+        "trustTicker": { "type": "array", "description": "USP trust ticker lines" },
+        "prepaidDiscountPercent": { "type": "number", "description": "Percentage discount for online payments" },
+        "codFee": { "type": "number", "description": "Extra fee for Cash on Delivery" },
+        "freeShippingThreshold": { "type": "number", "description": "Minimum amount for free shipping" },
+        "gstin": { "type": "string", "description": "GST Identification Number" },
+        "legalEntity": { "type": "string", "description": "Registered LLP or company legal name" },
+        "supportPhone": { "type": "string", "description": "Customer support WhatsApp / phone" },
+        "supportEmail": { "type": "string", "description": "Customer support email" },
+        "coupons": { "type": "array", "description": "Active promo coupons" }
+      }
+    },
+    "Review": {
+      "title": "Review",
+      "description": "Customer product testimonial or rating",
+      "type": "object",
+      "properties": {
+        "productId": { "type": "string", "description": "Associated product ID" },
+        "customerName": { "type": "string", "description": "Reviewer name" },
+        "rating": { "type": "number", "description": "Star rating out of 5" },
+        "comment": { "type": "string", "description": "Review commentary" },
+        "verified": { "type": "boolean", "description": "Verified buyer status" },
+        "date": { "type": "string", "description": "Date of review" }
+      },
+      "required": ["customerName", "rating", "comment"]
+    },
+    "IssueReport": {
+      "title": "IssueReport",
+      "description": "Damaged or wrong item claim within 48h delivery window",
+      "type": "object",
+      "properties": {
+        "orderId": { "type": "string", "description": "Order reference ID" },
+        "customerName": { "type": "string", "description": "Customer name" },
+        "customerEmail": { "type": "string", "description": "Customer email" },
+        "customerPhone": { "type": "string", "description": "Customer phone" },
+        "description": { "type": "string", "description": "Description of the problem" },
+        "status": { "type": "string", "description": "Review status" },
+        "createdAt": { "type": "string", "description": "Submission ISO timestamp" }
+      },
+      "required": ["orderId", "customerName", "customerPhone", "description"]
+    }
+  },
+  "firestore": {
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Printed coding notes and bundles catalog"
+    },
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Customer orders with fulfillment and payment tracking"
+    },
+    "/site_settings/{settingId}": {
+      "schema": "SiteSettings",
+      "description": "Global storefront options and pricing rules"
+    },
+    "/reviews/{reviewId}": {
+      "schema": "Review",
+      "description": "Customer reviews and testimonials"
+    },
+    "/issue_reports/{reportId}": {
+      "schema": "IssueReport",
+      "description": "Customer 48-hour delivery issue claims"
+    }
+  }
+}
