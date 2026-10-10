@@ -347,3 +347,117 @@ export async function trackCourierShipment(
     message: 'Simulation tracking logs retrieved.'
   };
 }
+
+export interface ShippingLabelResponse {
+  success: boolean;
+  labelUrl?: string;
+  htmlLabel?: string;
+  message: string;
+}
+
+/**
+ * Generate Shipping Label
+ * Interfaces with Courier APIs or falls back to a gorgeous printable 4x6" package label.
+ */
+export async function generateShippingLabel(
+  order: Order,
+  settings?: SiteSettings
+): Promise<ShippingLabelResponse> {
+  const provider = settings?.courierProvider || 'mock';
+  const token = settings?.courierToken;
+
+  if (provider === 'shiprocket' && token) {
+    try {
+      // Shiprocket requires calling their label generation endpoint
+      const response = await fetch('https://apiv2.shiprocket.in/v1/external/courier/generate/label', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          shipment_id: [order.trackingNumber] // Shiprocket uses shipment_id, falling back to AWB if needed
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data?.label_url) {
+          return {
+            success: true,
+            labelUrl: data.label_url,
+            message: 'Live Shiprocket PDF shipping label generated successfully!'
+          };
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to call Shiprocket Label API, using high-fidelity rendering:', e);
+    }
+  }
+
+  // Fallback / High-fidelity printable label design
+  const itemsText = order.items.map((i) => `${i.title} (x${i.quantity})`).join(', ');
+  const barcodeSim = `||| || ||| | |||| || ||| | ||| ${order.orderNumber} |||`;
+
+  const htmlLabel = `
+    <div style="width: 380px; font-family: 'Courier New', Courier, monospace; border: 3px solid #000000; padding: 16px; background-color: #FFFFFF; color: #000000; margin: 0 auto; box-sizing: border-box; font-size: 12px; line-height: 1.4;">
+      <div style="display: flex; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 8px;">
+        <div style="font-weight: 900; font-size: 16px; text-transform: uppercase;">
+          ${order.paymentMethod === 'cod' ? 'C.O.D.' : 'PREPAID'}
+        </div>
+        <div style="text-align: right; font-weight: bold;">
+          PYNOTES EXPRESS
+        </div>
+      </div>
+
+      <div style="padding: 10px 0; border-bottom: 1px solid #000;">
+        <div style="font-weight: bold; text-transform: uppercase; font-size: 10px; color: #666; margin-bottom: 3px;">To (Delivery Destination):</div>
+        <div style="font-weight: 900; font-size: 14px;">${order.customerName}</div>
+        <div style="font-weight: bold; margin-top: 4px;">${order.shippingAddress.streetAddress}</div>
+        <div>${order.shippingAddress.city}, ${order.shippingAddress.state} - <strong>${order.shippingAddress.pincode}</strong></div>
+        <div style="font-weight: bold; margin-top: 4px;">Phone: +91 ${order.customerPhone}</div>
+      </div>
+
+      <div style="padding: 10px 0; border-bottom: 1px solid #000; font-size: 11px;">
+        <div style="font-weight: bold; text-transform: uppercase; font-size: 10px; color: #666; margin-bottom: 3px;">Sender (Dispatch Hub):</div>
+        <div style="font-weight: bold;">PyNotes Warehouse Hub (A-41)</div>
+        <div>HSR Layout Sec-2, Bangalore - 560102</div>
+        <div>GSTIN: 07AAECP4108K1Z5</div>
+      </div>
+
+      <div style="padding: 10px 0; border-bottom: 2px solid #000;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+          <tr>
+            <td style="font-weight: bold; text-transform: uppercase; font-size: 10px; color: #666;">AWB Waybill:</td>
+            <td style="text-align: right; font-weight: bold; font-family: monospace;">${order.trackingNumber}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold; text-transform: uppercase; font-size: 10px; color: #666;">Order ID:</td>
+            <td style="text-align: right; font-weight: bold; font-family: monospace;">#${order.orderNumber}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold; text-transform: uppercase; font-size: 10px; color: #666;">Total Collectable:</td>
+            <td style="text-align: right; font-weight: 900; font-size: 13px;">₹${order.totalAmount}</td>
+          </tr>
+        </table>
+      </div>
+
+      <div style="padding: 10px 0; font-size: 11px; border-bottom: 1px dashed #000;">
+        <div style="font-weight: bold; text-transform: uppercase; font-size: 9px; color: #666;">Box Contents:</div>
+        <div style="font-weight: bold; line-clamp: 2; overflow: hidden;">${itemsText}</div>
+      </div>
+
+      <div style="text-align: center; padding-top: 14px;">
+        <div style="font-size: 24px; letter-spacing: 2px; font-weight: normal; margin-bottom: 4px;">${barcodeSim}</div>
+        <div style="font-size: 10px; font-weight: bold; font-family: monospace;">AWB: ${order.trackingNumber}</div>
+      </div>
+    </div>
+  `;
+
+  return {
+    success: true,
+    htmlLabel,
+    message: 'High-yield 4x6" printable parcel packaging sticker generated!'
+  };
+}
+

@@ -154,8 +154,12 @@ export const ProductDetailsPage: React.FC = () => {
 
   const handleBuyNow = () => {
     if (isSoldOut) return;
+    if (!currentUser) {
+      openAuthModal('login');
+      return;
+    }
     addToCart(product, quantity);
-    navigateTo('store'); 
+    navigateTo('store');
     openCheckout();
   };
 

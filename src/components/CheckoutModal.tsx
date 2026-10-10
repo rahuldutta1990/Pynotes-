@@ -54,7 +54,8 @@ export const CheckoutModal: React.FC = () => {
     saveCheckoutDraft,
     getCheckoutDraft,
     clearCheckoutDraft,
-    showToast
+    showToast,
+    openAuthModal
   } = useStore();
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('prepaid');
@@ -183,6 +184,11 @@ export const CheckoutModal: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!currentUser) {
+      showToast('Please log in to place an order.');
+      openAuthModal('login');
+      return;
+    }
     setValidationError('');
     setTouched({
       fullName: true,
