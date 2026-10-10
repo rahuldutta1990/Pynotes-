@@ -46,6 +46,9 @@ export const CheckoutModal: React.FC = () => {
     cartShippingFee,
     cartCodFee,
     appliedCoupon,
+    applyCoupon,
+    removeCoupon,
+    settings,
     currentUser,
     userSession,
     saveCheckoutDraft,
@@ -155,6 +158,21 @@ export const CheckoutModal: React.FC = () => {
       }
     }
   };
+
+  const allCoupons = settings?.coupons || [];
+  const applicableCoupons = allCoupons.filter((c) => {
+    // 1. Must be active
+    if (!c.active) return false;
+    // 2. Must meet minimum order value
+    if (c.minOrder > cartSubtotal) return false;
+    // 3. Must not be expired
+    if (c.expiryDate) {
+      const expiry = new Date(c.expiryDate).getTime();
+      const today = new Date().setHours(0, 0, 0, 0);
+      if (expiry < today) return false;
+    }
+    return true;
+  });
 
   const effectivePrepaidDiscount = paymentMethod === 'prepaid' ? cartPrepaidDiscount : 0;
   const effectiveCodFee = paymentMethod === 'cod' ? cartCodFee : 0;
@@ -752,8 +770,58 @@ export const CheckoutModal: React.FC = () => {
                   ))}
                 </div>
 
+                {/* APPLICABLE COUPONS SELECTION AREA */}
+                <div className="pt-2.5 border-t border-[#CED7DF] space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-[#6D86A0] uppercase tracking-wider font-heading flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 bg-[#12A5B0] rounded-full"></span>
+                      <span>Available Coupons</span>
+                    </span>
+                    {appliedCoupon && (
+                      <button
+                        type="button"
+                        onClick={removeCoupon}
+                        className="text-[10px] text-red-600 hover:text-red-700 font-extrabold uppercase font-heading hover:underline cursor-pointer"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+
+                  {applicableCoupons.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto pr-1">
+                      {applicableCoupons.map((c) => {
+                        const isSelected = appliedCoupon?.code.toUpperCase() === c.code.toUpperCase();
+                        return (
+                          <button
+                            key={c.code}
+                            type="button"
+                            onClick={() => applyCoupon(c.code)}
+                            className={`p-2 rounded-xl border text-left flex flex-col font-body transition-all cursor-pointer ${
+                              isSelected
+                                ? 'bg-[#DDF3F4]/50 border-[#12A5B0] text-[#0B3561] ring-2 ring-[#12A5B0]/15'
+                                : 'bg-white border-[#CED7DF] hover:border-[#12A5B0] text-[#071E38]'
+                            }`}
+                          >
+                            <span className="font-mono font-black text-[10px] tracking-wide block">
+                              {c.code}
+                            </span>
+                            <span className="text-[9px] text-[#6D86A0] mt-0.5">
+                              {c.discountPercent}% Off (Min: ₹{c.minOrder})
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="text-[10px] text-[#6D86A0] bg-white border border-dashed border-[#CED7DF] p-2.5 rounded-xl text-center">
+                      No coupon codes match this cart value. Try adding more items!
+                    </div>
+                  )}
+                </div>
+
                 {/* Pricing Table */}
-                <div className="space-y-2 text-xs text-[#3C5D81] pt-2 border-t border-[#CED7DF]">
+                <div className="space-y-2 text-xs text-[#3C5D81] pt-2.5 border-t border-[#CED7DF]">
                   <div className="flex justify-between">
                     <span>Items Total</span>
                     <span className="font-bold text-[#0B3561] font-mono">

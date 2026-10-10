@@ -23,7 +23,8 @@ export const SpotlightSearchModal: React.FC = () => {
     setSelectedProductForModal,
     setSelectedCategory,
     addToCart,
-    showToast
+    showToast,
+    navigateTo
   } = useStore();
 
   const [query, setQuery] = useState('');
@@ -115,6 +116,7 @@ export const SpotlightSearchModal: React.FC = () => {
   const handleSelectProduct = (product: Product) => {
     closeSpotlight();
     setSelectedProductForModal(product);
+    navigateTo('product');
   };
 
   const popularTags = [

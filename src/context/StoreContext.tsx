@@ -23,9 +23,11 @@ import {
   saveSiteSettings,
   addProductReview,
   submitIssueReport,
-  resetDemoStoreData
+  resetDemoStoreData,
+  fetchLiveTrackingEvents
 } from '../services/storeService';
 import { INITIAL_PRODUCTS, INITIAL_SITE_SETTINGS, INITIAL_REVIEWS, INITIAL_ORDERS } from '../data/initialCatalog';
+import { trackCourierShipment } from '../services/courierService';
 
 interface StoreContextType {
   products: Product[];
@@ -117,6 +119,7 @@ interface StoreContextType {
   handleAddReview: (review: Review) => Promise<void>;
   handleSubmitIssue: (issue: IssueReport) => Promise<void>;
   handleResetDemoData: () => Promise<void>;
+  handleFetchLiveTracking: (orderId: string) => Promise<void>;
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
@@ -252,13 +255,40 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   });
 
-  // Dedicated URL Route State (/store, /admin, /account)
+// Helper to match a slug to a product
+const getProductFromSlug = (slug: string, productsList: Product[]) => {
+  const cleanSlug = decodeURIComponent(slug).toLowerCase();
+  let found = productsList.find((p) => p.slug.toLowerCase() === cleanSlug);
+  if (found) return found;
+
+  // Soft/normalized match for flexibility
+  if (cleanSlug.includes('c-programming') || cleanSlug.includes('pointers-memory') || cleanSlug.includes('book-c') || cleanSlug.startsWith('c-')) {
+    found = productsList.find((p) => p.id === 'book-c' || p.slug.includes('pointers-memory') || p.slug.includes('-c-'));
+    if (found) return found;
+  }
+  if (cleanSlug.includes('python')) {
+    found = productsList.find((p) => p.id === 'book-python' || p.slug.includes('python'));
+    if (found) return found;
+  }
+  if (cleanSlug.includes('java')) {
+    found = productsList.find((p) => p.id === 'book-java' || p.slug.includes('java'));
+    if (found) return found;
+  }
+  if (cleanSlug.includes('dsa')) {
+    found = productsList.find((p) => p.id === 'book-dsa-py' || p.id === 'book-dsa-jv' || p.slug.includes('dsa'));
+    if (found) return found;
+  }
+  return productsList[0];
+};
+
+  // Dedicated URL Route State (/store, /admin, /account, /product)
   const [currentRoute, setCurrentRoute] = useState<AppRoute>(() => {
     if (typeof window === 'undefined') return 'store';
     const path = window.location.pathname.toLowerCase();
     const hash = window.location.hash.toLowerCase();
     if (path === '/admin' || hash === '#/admin' || hash.startsWith('#/admin')) return 'admin';
     if (path === '/account' || hash === '#/account' || hash.startsWith('#/account')) return 'account';
+    if (path.startsWith('/product/') || hash.startsWith('#/product/')) return 'product';
     return 'store';
   });
 
@@ -270,17 +300,37 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         setCurrentRoute('admin');
       } else if (path === '/account' || hash === '#/account' || hash.startsWith('#/account')) {
         setCurrentRoute('account');
+      } else if (path.startsWith('/product/') || hash.startsWith('#/product/')) {
+        setCurrentRoute('product');
+        const rawHash = window.location.hash;
+        const rawPath = window.location.pathname;
+        let slug = '';
+        if (rawHash.startsWith('#/product/')) {
+          slug = rawHash.substring('#/product/'.length);
+        } else {
+          slug = rawPath.substring('/product/'.length);
+        }
+        if (slug) {
+          const found = getProductFromSlug(slug, products);
+          if (found) {
+            setSelectedProductForModal(found);
+          }
+        }
       } else {
         setCurrentRoute('store');
       }
     };
     window.addEventListener('hashchange', handleUrlChange);
     window.addEventListener('popstate', handleUrlChange);
+    
+    // Run on initial mount / products load
+    handleUrlChange();
+
     return () => {
       window.removeEventListener('hashchange', handleUrlChange);
       window.removeEventListener('popstate', handleUrlChange);
     };
-  }, []);
+  }, [products]);
 
   // Periodic Session Expiry Verification (Runs every 60 seconds)
   useEffect(() => {
@@ -386,8 +436,12 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       window.location.hash = '#/admin';
     } else if (route === 'account') {
       window.location.hash = '#/account';
+    } else if (route === 'product') {
+      if (selectedProductForModal) {
+        window.location.hash = `#/product/${selectedProductForModal.slug}`;
+      }
     } else {
-      if (window.location.hash === '#/admin' || window.location.hash === '#/account') {
+      if (window.location.hash === '#/admin' || window.location.hash === '#/account' || window.location.hash.startsWith('#/product/')) {
         window.location.hash = '';
       }
     }
@@ -809,6 +863,24 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     showToast('Demo store data refreshed to default catalogue & sample orders.');
   };
 
+  const handleFetchLiveTracking = async (orderId: string) => {
+    try {
+      const order = orders.find(o => o.id === orderId);
+      if (!order || !order.trackingNumber || order.trackingNumber === 'PENDING-CONFIRMATION') return;
+      
+      showToast('Syncing live courier tracking checkpoints...');
+      const updatedEvents = await fetchLiveTrackingEvents(orderId, settings, order.trackingNumber);
+      if (updatedEvents) {
+        showToast('Pulled latest real-time tracking activities from courier!');
+      } else {
+        showToast('Courier status is currently up to date.');
+      }
+    } catch (e) {
+      console.warn('Failed to pull live tracking updates:', e);
+      showToast('Courier tracking servers busy. Try again later.');
+    }
+  };
+
   return (
     <StoreContext.Provider
       value={{
@@ -894,7 +966,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         handleSaveSettings,
         handleAddReview,
         handleSubmitIssue,
-        handleResetDemoData
+        handleResetDemoData,
+        handleFetchLiveTracking
       }}
     >
       {children}

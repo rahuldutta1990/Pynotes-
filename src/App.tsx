@@ -10,7 +10,7 @@ import { TrustTicker } from './components/TrustTicker';
 import { Hero } from './components/Hero';
 import { ComparisonSection } from './components/ComparisonSection';
 import { ProductCatalog } from './components/ProductCatalog';
-import { ProductDetailModal } from './components/ProductDetailModal';
+import { ProductDetailsPage } from './components/ProductDetailsPage';
 import { CartDrawer } from './components/CartDrawer';
 import { CheckoutModal } from './components/CheckoutModal';
 import { OrderSuccessModal } from './components/OrderSuccessModal';
@@ -39,19 +39,26 @@ const ToastNotification: React.FC = () => {
 };
 
 const MainStorefront: React.FC = () => {
+  const { currentRoute } = useStore();
+
   return (
     <div className="min-h-screen bg-[#F7FAFC] text-[#071E38] flex flex-col font-body selection:bg-[#DDF3F4] selection:text-[#0B3561]">
       <Header />
-      <TrustTicker />
       <main className="flex-1">
-        <Hero />
-        <ComparisonSection />
-        <ProductCatalog />
+        {currentRoute === 'product' ? (
+          <ProductDetailsPage />
+        ) : (
+          <>
+            <Hero />
+            <TrustTicker />
+            <ComparisonSection />
+            <ProductCatalog />
+          </>
+        )}
       </main>
       <Footer />
 
       {/* Global Modals & Drawers */}
-      <ProductDetailModal />
       <CartDrawer />
       <CheckoutModal />
       <OrderSuccessModal />

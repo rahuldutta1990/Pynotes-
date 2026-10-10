@@ -8,7 +8,7 @@ interface ProductCardProps {
 }
 
 export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
-  const { addToCart, setSelectedProductForModal, openCheckout } = useStore();
+  const { addToCart, setSelectedProductForModal, openCheckout, navigateTo } = useStore();
 
   const isSoldOut = product.stockQuantity <= 0;
   const isLowStock = product.stockQuantity > 0 && product.stockQuantity <= 10;
@@ -31,7 +31,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
 
   return (
     <div
-      onClick={() => setSelectedProductForModal(product)}
+      onClick={() => {
+        setSelectedProductForModal(product);
+        navigateTo('product');
+      }}
       className="group bg-white rounded-3xl border border-[#CED7DF] overflow-hidden shadow-2xs hover:shadow-xl hover:border-[#12A5B0] transition-all duration-200 flex flex-col cursor-pointer relative"
     >
       {/* Product Image / Mockup Container */}

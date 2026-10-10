@@ -55,7 +55,7 @@ const TOPICS: InteractiveTopic[] = [
 ];
 
 export const Hero: React.FC = () => {
-  const { setSelectedCategory, setSelectedProductForModal, products } = useStore();
+  const { setSelectedCategory, setSelectedProductForModal, products, navigateTo } = useStore();
 
   const [activeTopicIndex, setActiveTopicIndex] = useState(0);
   const [isMuted, setIsMuted] = useState(true);
@@ -107,20 +107,7 @@ export const Hero: React.FC = () => {
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#12A5B0]/20 via-transparent to-transparent" />
       </div>
 
-      {/* Floating Audio Control (Video runs continuously, ongoing) */}
-      <div className="absolute top-4 right-4 sm:top-6 sm:right-8 z-20 flex items-center gap-2">
-        <button
-          onClick={toggleMute}
-          className="p-2 sm:px-3 sm:py-1.5 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/15 text-white/90 flex items-center gap-1.5 transition-all cursor-pointer shadow-lg hover:scale-105"
-          title={isMuted ? 'Unmute video audio' : 'Mute video audio'}
-          aria-label="Toggle audio"
-        >
-          {isMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5 text-[#12A5B0]" />}
-          <span className="hidden sm:inline text-[11px] font-medium tracking-wide">
-            {isMuted ? 'Muted' : 'Audio On'}
-          </span>
-        </button>
-      </div>
+      {/* Ambient video background continues ongoing without audio controls */}
 
       {/* 2. FOREGROUND CONTENT: MINIMAL WRITEUP & HIGHLY INTERACTIVE ELEMENT */}
       <div className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
@@ -177,7 +164,10 @@ export const Hero: React.FC = () => {
             <div className="flex flex-wrap items-center gap-3 pt-3">
               <button
                 onClick={() => {
-                  if (targetProduct) setSelectedProductForModal(targetProduct);
+                  if (targetProduct) {
+                    setSelectedProductForModal(targetProduct);
+                    navigateTo('product');
+                  }
                 }}
                 className="bg-[#12A5B0] hover:bg-[#0e8a93] text-white font-black px-6 py-3.5 rounded-xl shadow-lg flex items-center gap-2 transition-all cursor-pointer text-sm font-heading hover:scale-[1.02]"
               >
@@ -324,7 +314,10 @@ export const Hero: React.FC = () => {
                   </div>
 
                   <button
-                    onClick={() => setSelectedProductForModal(targetProduct)}
+                    onClick={() => {
+                      setSelectedProductForModal(targetProduct);
+                      navigateTo('product');
+                    }}
                     className="text-[#12A5B0] hover:text-[#0B3561] font-bold flex items-center gap-1 cursor-pointer transition-colors"
                   >
                     <span>Inspect Book</span>

@@ -13,6 +13,9 @@ import {
 import { db, handleFirestoreError, OperationType } from '../firebase/config';
 import { Product, Order, SiteSettings, Review, IssueReport, CartItem, OrderStatus, ShippingAddress, PaymentMethod } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_SITE_SETTINGS, INITIAL_REVIEWS, INITIAL_ORDERS } from '../data/initialCatalog';
+import { sendAutomatedEmail } from './emailService';
+import { trackCourierShipment } from './courierService';
+
 
 const PRODUCTS_COLLECTION = 'products';
 const ORDERS_COLLECTION = 'orders';
@@ -258,6 +261,18 @@ export async function createOrder(
 
     // Save order
     await setDoc(doc(db, ORDERS_COLLECTION, orderId), newOrder);
+
+    // Dispatch automated confirmation email
+    try {
+      let siteSettings: SiteSettings | undefined = undefined;
+      const settingsSnap = await getDoc(doc(db, SETTINGS_COLLECTION, 'general'));
+      if (settingsSnap.exists()) {
+        siteSettings = settingsSnap.data() as SiteSettings;
+      }
+      await sendAutomatedEmail(newOrder, 'order_confirmation', undefined, siteSettings);
+    } catch (e) {
+      console.error('Failed to trigger automatic email confirmation:', e);
+    }
   } catch (err) {
     console.error('Error creating order in Firestore:', err);
     // Even if Firestore write is delayed, return the order for UI
@@ -479,6 +494,26 @@ export function subscribeToNewsletterSubscribers(callback: (subscribers: any[]) 
       callback([]);
     }
   );
+}
+
+// Fetch live tracking events from Delhivery or Shiprocket API and update in Firestore
+export async function fetchLiveTrackingEvents(
+  orderId: string,
+  settings: SiteSettings,
+  trackingNumber: string
+): Promise<any[] | null> {
+  try {
+    const trackingResult = await trackCourierShipment(trackingNumber, settings);
+    if (trackingResult.success && trackingResult.events && trackingResult.events.length > 0) {
+      await updateDoc(doc(db, ORDERS_COLLECTION, orderId), {
+        trackingEvents: trackingResult.events
+      });
+      return trackingResult.events;
+    }
+  } catch (error) {
+    console.error('Failed to fetch and update live tracking events in Firestore:', error);
+  }
+  return null;
 }
 
 // Reset store to demo state

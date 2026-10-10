@@ -111,6 +111,7 @@ export interface Coupon {
   discountPercent: number;
   minOrder: number;
   active: boolean;
+  expiryDate?: string;
 }
 
 export interface SiteSettings {
@@ -128,6 +129,12 @@ export interface SiteSettings {
   supportEmail: string;
   coupons: Coupon[];
   serviceablePincodes?: string[];
+  emailJsServiceId?: string;
+  emailJsTemplateId?: string;
+  emailJsPublicKey?: string;
+  courierProvider?: 'delhivery' | 'shiprocket' | 'mock';
+  courierToken?: string;
+  courierSandbox?: boolean;
 }
 
 export interface Review {
@@ -182,4 +189,4 @@ export interface AdminSession {
   isAuthenticated: boolean;
 }
 
-export type AppRoute = 'store' | 'admin' | 'account';
+export type AppRoute = 'store' | 'admin' | 'account' | 'product';

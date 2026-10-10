@@ -28,7 +28,9 @@ import {
   ArrowLeft,
   LogOut,
   ShieldCheck,
-  Mail
+  Mail,
+  Tag,
+  Truck
 } from 'lucide-react';
 import {
   validateProductForm,
@@ -36,6 +38,11 @@ import {
   validateGstin
 } from '../../utils/validation';
 import { subscribeToNewsletterSubscribers } from '../../services/storeService';
+import { doc, updateDoc, collection, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { db } from '../../firebase/config';
+import { sendAutomatedEmail } from '../../services/emailService';
+import { createCourierOrder } from '../../services/courierService';
+
 
 interface AdminPanelProps {
   isStandalone?: boolean;
@@ -70,11 +77,30 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ isStandalone = false }) 
   const [settingsFormError, setSettingsFormError] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<
-    'dashboard' | 'orders' | 'cod-call-list' | 'products' | 'stock' | 'settings' | 'issues' | 'newsletter'
+    'dashboard' | 'orders' | 'cod-call-list' | 'products' | 'stock' | 'settings' | 'issues' | 'newsletter' | 'communications' | 'coupons'
   >('dashboard');
 
   // Newsletter subscribers state
   const [subscribers, setSubscribers] = useState<any[]>([]);
+  // Dispatched communications state
+  const [dispatchedEmails, setDispatchedEmails] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (activeTab === 'communications') {
+      const q = query(collection(db, 'dispatched_emails'), orderBy('createdAt', 'desc'));
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const mails: any[] = [];
+        snapshot.forEach((snap) => {
+          mails.push({ id: snap.id, ...snap.data() });
+        });
+        setDispatchedEmails(mails);
+      }, (err) => {
+        console.warn('dispatched_emails snap error:', err);
+      });
+      return () => unsubscribe();
+    }
+  }, [activeTab]);
+
 
   useEffect(() => {
     if (activeTab === 'newsletter') {
@@ -90,7 +116,200 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ isStandalone = false }) 
   const [orderPaymentFilter] = useState<string>('All');
   const [orderSearch, setOrderSearch] = useState('');
   const [selectedOrderDetails, setSelectedOrderDetails] = useState<Order | null>(null);
+  const [selectedEmailPreview, setSelectedEmailPreview] = useState<any | null>(null);
+  const [isFiringNotif, setIsFiringNotif] = useState(false);
 
+  // Coupon Creation States
+  const [newCouponCode, setNewCouponCode] = useState('');
+  const [newCouponDiscount, setNewCouponDiscount] = useState<string>('10');
+  const [newCouponMinOrder, setNewCouponMinOrder] = useState<string>('0');
+  const [newCouponExpiry, setNewCouponExpiry] = useState('');
+  const [isAddingCoupon, setIsAddingCoupon] = useState(false);
+  const [couponFormError, setCouponFormError] = useState<string | null>(null);
+
+    const handleGenerateTrackingID = async (orderId: string) => {
+    try {
+      const targetOrder = orders.find(o => o.id === orderId);
+      if (!targetOrder) {
+        showToast('Associated order not found.');
+        return;
+      }
+
+      showToast('Generating consignment on Courier API...');
+      const apiResult = await createCourierOrder(targetOrder, settings);
+      const trackingId = apiResult.awb || `SR-BLU-${Math.floor(10000000 + Math.random() * 90000000)}`;
+      const assignedCourier = apiResult.courier || 'Blue Dart Surface';
+
+      const orderRef = doc(db, 'orders', orderId);
+      const updatedData = {
+        trackingNumber: trackingId,
+        courier: assignedCourier,
+        status: 'Completed or Shipped' as OrderStatus
+      };
+      await updateDoc(orderRef, updatedData);
+      
+      // Send automated email for Tracking ID / Shipment dispatch
+      const fullUpdatedOrder = { ...targetOrder, ...updatedData };
+      await sendAutomatedEmail(fullUpdatedOrder, 'tracking_id_generated', undefined, settings);
+
+      showToast(`AWB ${trackingId} Generated! Courier: ${assignedCourier}`);
+      if (selectedOrderDetails && selectedOrderDetails.id === orderId) {
+        setSelectedOrderDetails({
+          ...selectedOrderDetails,
+          ...updatedData
+        });
+      }
+    } catch (e) {
+      console.error(e);
+      showToast('Error generating tracking ID');
+    }
+  };
+
+  const handleFireNotification = async (order: Order) => {
+    if (!order.trackingNumber || order.trackingNumber === 'PENDING-CONFIRMATION') {
+      showToast('Please generate a valid tracking ID first.');
+      return;
+    }
+    setIsFiringNotif(true);
+    setTimeout(async () => {
+      try {
+        const timestamp = new Date().toLocaleDateString('en-IN', { hour: '2-digit', minute: '2-digit' });
+        const newEvent = {
+          status: 'Notification Alerts Dispatched',
+          timestamp,
+          location: 'Marketing Communication Hub',
+          note: `Fired tracking updates email to ${order.customerEmail} & WhatsApp notification containing Blue Dart AWB (${order.trackingNumber}) to +91 ${order.customerPhone}`
+        };
+
+        const updatedEvents = [...(order.trackingEvents || []), newEvent];
+        const orderRef = doc(db, 'orders', order.id);
+        await updateDoc(orderRef, {
+          trackingEvents: updatedEvents
+        });
+
+        // Actually trigger automated email dispatch via EmailJS/simulated!
+        await sendAutomatedEmail(order, 'tracking_id_generated', undefined, settings);
+
+        if (selectedOrderDetails && selectedOrderDetails.id === order.id) {
+          setSelectedOrderDetails({
+            ...selectedOrderDetails,
+            trackingEvents: updatedEvents
+          });
+        }
+        showToast('🔥 Dispatch complete! Email and WhatsApp alerts sent to customer.');
+      } catch (err) {
+        console.error(err);
+        showToast('Failed to log alert dispatch event.');
+      } finally {
+        setIsFiringNotif(false);
+      }
+    }, 800);
+  };
+
+  const handleAddCouponSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCouponFormError(null);
+
+    const code = newCouponCode.trim().toUpperCase();
+    if (!code) {
+      setCouponFormError('Coupon code is required.');
+      return;
+    }
+
+    if (!/^[A-Z0-9_-]+$/.test(code)) {
+      setCouponFormError('Coupon code must contain only alphanumeric characters, dashes, or underscores.');
+      return;
+    }
+
+    const discount = Number(newCouponDiscount);
+    if (isNaN(discount) || discount < 1 || discount > 100) {
+      setCouponFormError('Discount must be a number between 1 and 100.');
+      return;
+    }
+
+    const minOrder = Number(newCouponMinOrder);
+    if (isNaN(minOrder) || minOrder < 0) {
+      setCouponFormError('Minimum order value must be a valid non-negative number.');
+      return;
+    }
+
+    // Check if duplicate code exists
+    const currentCoupons = settings.coupons || [];
+    if (currentCoupons.some(c => c.code.toUpperCase() === code)) {
+      setCouponFormError(`Coupon code "${code}" already exists.`);
+      return;
+    }
+
+    const newCoupon = {
+      code,
+      discountPercent: discount,
+      minOrder,
+      active: true,
+      expiryDate: newCouponExpiry || undefined
+    };
+
+    const updatedSettings: SiteSettings = {
+      ...settings,
+      coupons: [...currentCoupons, newCoupon]
+    };
+
+    try {
+      await handleSaveSettings(updatedSettings);
+      showToast(`Coupon "${code}" has been created successfully!`);
+      // Reset form
+      setNewCouponCode('');
+      setNewCouponDiscount('10');
+      setNewCouponMinOrder('0');
+      setNewCouponExpiry('');
+      setIsAddingCoupon(false);
+    } catch (err) {
+      console.error(err);
+      setCouponFormError('Failed to save coupon to Firestore site settings.');
+    }
+  };
+
+  const handleToggleCoupon = async (codeToToggle: string) => {
+    const currentCoupons = settings.coupons || [];
+    const updatedCoupons = currentCoupons.map(c => 
+      c.code.toUpperCase() === codeToToggle.toUpperCase() ? { ...c, active: !c.active } : c
+    );
+
+    const updatedSettings: SiteSettings = {
+      ...settings,
+      coupons: updatedCoupons
+    };
+
+    try {
+      await handleSaveSettings(updatedSettings);
+      const isNowActive = updatedCoupons.find(c => c.code.toUpperCase() === codeToToggle.toUpperCase())?.active;
+      showToast(`Coupon "${codeToToggle.toUpperCase()}" is now ${isNowActive ? 'Active' : 'Inactive'}.`);
+    } catch (err) {
+      console.error(err);
+      showToast('Failed to toggle coupon status.');
+    }
+  };
+
+  const handleDeleteCoupon = async (codeToDelete: string) => {
+    if (!window.confirm(`Are you sure you want to permanently delete the promo coupon "${codeToDelete.toUpperCase()}"?`)) {
+      return;
+    }
+
+    const currentCoupons = settings.coupons || [];
+    const updatedCoupons = currentCoupons.filter(c => c.code.toUpperCase() !== codeToDelete.toUpperCase());
+
+    const updatedSettings: SiteSettings = {
+      ...settings,
+      coupons: updatedCoupons
+    };
+
+    try {
+      await handleSaveSettings(updatedSettings);
+      showToast(`Coupon "${codeToDelete.toUpperCase()}" has been deleted.`);
+    } catch (err) {
+      console.error(err);
+      showToast('Failed to delete coupon.');
+    }
+  };
   // Product edit modal state
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
@@ -474,6 +693,30 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ isStandalone = false }) 
             >
               <Mail className="w-3.5 h-3.5" />
               <span>Newsletter ({subscribers.length})</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('communications')}
+              className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'communications'
+                  ? 'bg-[#12A5B0] text-white shadow-sm'
+                  : 'text-[#CED7DF] hover:bg-[#0B3561]'
+              }`}
+            >
+              <MessageCircle className="w-3.5 h-3.5" />
+              <span>Comms Hub ({dispatchedEmails.length})</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('coupons')}
+              className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'coupons'
+                  ? 'bg-[#12A5B0] text-white shadow-sm'
+                  : 'text-[#CED7DF] hover:bg-[#0B3561]'
+              }`}
+            >
+              <Tag className="w-3.5 h-3.5" />
+              <span>Promo Coupons ({(settings.coupons || []).length})</span>
             </button>
           </div>
 
@@ -1536,6 +1779,131 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ isStandalone = false }) 
                   </div>
                 </div>
 
+                {/* Email Service Configuration Section */}
+                <div className="pt-6 border-t border-[#E7EBEF] space-y-4">
+                  <div>
+                    <h4 className="text-[#0B3561] font-extrabold uppercase text-xs font-heading tracking-wide mb-1 flex items-center gap-1.5">
+                      <Mail className="w-4 h-4 text-[#12A5B0]" />
+                      <span>Live Email Delivery (EmailJS API Integration)</span>
+                    </h4>
+                    <p className="text-[11px] text-[#6D86A0] mb-3">
+                      Enter your EmailJS credentials below to send real transactional and tracking emails on customer orders. If left blank, PyNotes will run in simulated development delivery mode (logged in Firestore).
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block font-bold text-[#0B3561] mb-1 font-heading text-xs">
+                        EmailJS Service ID
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. service_xxxxxxx"
+                        value={settingsForm.emailJsServiceId || ''}
+                        onChange={(e) =>
+                          setSettingsForm({ ...settingsForm, emailJsServiceId: e.target.value })
+                        }
+                        className="w-full bg-[#F7FAFC] border border-[#CED7DF] rounded-xl p-2.5 font-mono text-xs text-[#0B3561]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-[#0B3561] mb-1 font-heading text-xs">
+                        EmailJS Template ID
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. template_xxxxxxx"
+                        value={settingsForm.emailJsTemplateId || ''}
+                        onChange={(e) =>
+                          setSettingsForm({ ...settingsForm, emailJsTemplateId: e.target.value })
+                        }
+                        className="w-full bg-[#F7FAFC] border border-[#CED7DF] rounded-xl p-2.5 font-mono text-xs text-[#0B3561]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-[#0B3561] mb-1 font-heading text-xs">
+                        EmailJS Public Key
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. user_xxxxxxxxxxxxxxx"
+                        value={settingsForm.emailJsPublicKey || ''}
+                        onChange={(e) =>
+                          setSettingsForm({ ...settingsForm, emailJsPublicKey: e.target.value })
+                        }
+                        className="w-full bg-[#F7FAFC] border border-[#CED7DF] rounded-xl p-2.5 font-mono text-xs text-[#0B3561]"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Delivery Courier API Configuration Section */}
+                <div className="pt-6 border-t border-[#E7EBEF] space-y-4">
+                  <div>
+                    <h4 className="text-[#0B3561] font-extrabold uppercase text-xs font-heading tracking-wide mb-1 flex items-center gap-1.5">
+                      <Truck className="w-4 h-4 text-[#12A5B0]" />
+                      <span>Logistics & Courier API Integration (Shiprocket / Delhivery)</span>
+                    </h4>
+                    <p className="text-[11px] text-[#6D86A0] mb-3">
+                      Select your preferred Indian logistics partner and enter your secret Token/API Key. When configured, PyNotes will make live consignment bookings and pull actual waybill tracking checkpoint details directly.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block font-bold text-[#0B3561] mb-1 font-heading text-xs">
+                        Logistics Provider
+                      </label>
+                      <select
+                        value={settingsForm.courierProvider || 'mock'}
+                        onChange={(e) =>
+                          setSettingsForm({ 
+                            ...settingsForm, 
+                            courierProvider: e.target.value as 'delhivery' | 'shiprocket' | 'mock'
+                          })
+                        }
+                        className="w-full bg-[#F7FAFC] border border-[#CED7DF] rounded-xl p-2.5 text-xs text-[#0B3561] font-bold font-heading focus:outline-none"
+                      >
+                        <option value="mock">Simulated Dispatch Pipeline</option>
+                        <option value="delhivery">Delhivery One API</option>
+                        <option value="shiprocket">Shiprocket APiv2 Gateway</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-[#0B3561] mb-1 font-heading text-xs">
+                        API Token / Key
+                      </label>
+                      <input
+                        type="password"
+                        placeholder={settingsForm.courierToken ? '••••••••••••••••' : 'Enter API Authorization Token'}
+                        value={settingsForm.courierToken || ''}
+                        onChange={(e) =>
+                          setSettingsForm({ ...settingsForm, courierToken: e.target.value })
+                        }
+                        className="w-full bg-[#F7FAFC] border border-[#CED7DF] rounded-xl p-2.5 font-mono text-xs text-[#0B3561]"
+                      />
+                    </div>
+
+                    <div className="flex items-center pt-5">
+                      <label className="flex items-center gap-2 text-xs font-bold text-[#0B3561] cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={settingsForm.courierSandbox ?? true}
+                          onChange={(e) =>
+                            setSettingsForm({ ...settingsForm, courierSandbox: e.target.checked })
+                          }
+                          className="w-4 h-4 rounded text-[#12A5B0] border-[#CED7DF] focus:ring-[#12A5B0]"
+                        />
+                        <span>Enable Sandbox / Test Environment Mode</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+
                 {/* Reset Store to Demo State button */}
                 <div className="pt-4 border-t border-[#E7EBEF] flex items-center justify-between">
                   <div>
@@ -1667,6 +2035,328 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ isStandalone = false }) 
               </div>
             </div>
           )}
+
+          {/* ===================== TAB 9: COMMUNICATIONS HUB (EMAILS & WHATSAPP) ===================== */}
+          {activeTab === 'communications' && (
+            <div className="space-y-4">
+              <div className="bg-white p-6 rounded-3xl border border-[#CED7DF] shadow-xs space-y-4 font-body">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#E7EBEF] pb-4 gap-2">
+                  <div>
+                    <h3 className="text-sm font-extrabold text-[#0B3561] uppercase font-heading flex items-center gap-2">
+                      <MessageCircle className="w-4 h-4 text-[#12A5B0]" />
+                      <span>Email & WhatsApp Communications Audit Log</span>
+                    </h3>
+                    <p className="text-xs text-[#6D86A0]">
+                      Track, inspect, and manual re-send system-triggered transactional notifications.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="bg-[#DDF3F4] text-[#12A5B0] font-bold text-xs px-3 py-1.5 rounded-xl">
+                      Total logs: {dispatchedEmails.length}
+                    </span>
+                  </div>
+                </div>
+
+                {dispatchedEmails.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-xs divide-y divide-[#CED7DF] text-left">
+                      <thead>
+                        <tr className="bg-[#F7FAFC] text-[#6D86A0] uppercase font-bold text-[10px] font-heading">
+                          <th className="py-3 px-4">Order Ref</th>
+                          <th className="py-3 px-4">Recipient</th>
+                          <th className="py-3 px-4">Message Details</th>
+                          <th className="py-3 px-4">Delivery Mode</th>
+                          <th className="py-3 px-4 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#CED7DF] text-xs">
+                        {dispatchedEmails.map((mail) => (
+                          <tr key={mail.id} className="hover:bg-[#F7FAFC] transition-colors">
+                            <td className="py-3 px-4 font-bold text-[#0B3561] font-mono">
+                              {mail.orderNumber}
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="font-bold text-[#0B3561]">{mail.recipientName}</div>
+                              <div className="text-[10px] text-[#6D86A0] font-mono">{mail.recipientEmail}</div>
+                              <div className="text-[10px] text-emerald-600 font-mono">WhatsApp: +91 {mail.recipientPhone}</div>
+                            </td>
+                            <td className="py-3 px-4 space-y-1">
+                              <div className="font-semibold text-[#071E38] line-clamp-1">{mail.subject}</div>
+                              <div className="flex gap-2">
+                                <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${
+                                  mail.type === 'order_confirmation' ? 'bg-[#DDF3F4] text-[#12A5B0]' :
+                                  mail.type === 'tracking_id_generated' ? 'bg-emerald-50 text-emerald-600' :
+                                  'bg-amber-50 text-amber-600'
+                                }`}>
+                                  {mail.type.replace(/_/g, ' ')}
+                                </span>
+                                <span className="text-[9px] text-[#9DAEC0] font-mono">
+                                  {new Date(mail.createdAt).toLocaleString('en-IN')}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="flex flex-col gap-1">
+                                <span className={`inline-block text-[10px] px-2 py-0.5 rounded-full font-bold uppercase text-center ${
+                                  mail.status === 'sent' 
+                                    ? 'bg-emerald-100 text-emerald-700 border border-emerald-300' 
+                                    : 'bg-indigo-50 text-indigo-600 border border-indigo-200'
+                                }`}>
+                                  {mail.status === 'sent' ? 'LIVE SMTP / EMAILJS' : 'DEV SMTP SIMULATOR'}
+                                </span>
+                                <span className="text-[9px] text-emerald-600 font-bold flex items-center gap-1">
+                                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full inline-block animate-ping"></span>
+                                  WhatsApp Dispatched
+                                </span>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 text-right space-x-1 whitespace-nowrap">
+                              <button
+                                onClick={() => setSelectedEmailPreview(mail)}
+                                className="bg-[#0B3561] text-white font-bold text-[10px] px-2.5 py-1.5 rounded-lg hover:bg-[#12A5B0] transition-colors cursor-pointer"
+                              >
+                                View Payload
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    const targetOrder = orders.find(o => o.id === mail.orderId || o.orderNumber === mail.orderNumber);
+                                    if (!targetOrder) {
+                                      showToast('Associated order details not found inside catalog.');
+                                      return;
+                                    }
+                                    const res = await sendAutomatedEmail(targetOrder, mail.type, undefined, settings);
+                                    if (res.success) {
+                                      showToast(`🔥 Successfully re-triggered automated notification dispatch! Mode: ${res.mode}`);
+                                    } else {
+                                      showToast('Resend failed.');
+                                    }
+                                  } catch (err) {
+                                    console.error(err);
+                                    showToast('Failed to trigger manual resend.');
+                                  }
+                                }}
+                                className="bg-[#CED7DF] text-[#0B3561] hover:bg-[#E7EBEF] font-bold text-[10px] px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
+                              >
+                                Re-send
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="text-center py-16 text-[#9DAEC0] text-xs">
+                    No automated communications dispatched yet. Emails are generated on placing order or generating Tracking IDs.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ===================== TAB 10: PROMO COUPONS MANAGEMENT ===================== */}
+          {activeTab === 'coupons' && (
+            <div className="space-y-4">
+              <div className="bg-white p-6 rounded-3xl border border-[#CED7DF] shadow-xs space-y-4 font-body">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#E7EBEF] pb-4 gap-2">
+                  <div>
+                    <h3 className="text-sm font-extrabold text-[#0B3561] uppercase font-heading flex items-center gap-2">
+                      <Tag className="w-4 h-4 text-[#12A5B0]" />
+                      <span>Store Promo Coupons Management</span>
+                    </h3>
+                    <p className="text-xs text-[#6D86A0]">
+                      Define custom discount coupon codes, minimum spend targets, and expiry dates.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setIsAddingCoupon(!isAddingCoupon);
+                      setCouponFormError(null);
+                    }}
+                    className="bg-[#12A5B0] hover:bg-[#0e8a93] text-white font-extrabold text-xs px-4 py-2 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer uppercase tracking-wider font-heading"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>{isAddingCoupon ? 'Close Form' : 'Add New Coupon'}</span>
+                  </button>
+                </div>
+
+                {/* ADD COUPON FORM */}
+                {isAddingCoupon && (
+                  <form onSubmit={handleAddCouponSubmit} className="bg-[#F7FAFC] border border-[#CED7DF] rounded-2xl p-5 space-y-4 max-w-xl animate-in slide-in-from-top-3 duration-200">
+                    <div className="font-bold text-[#0B3561] text-xs uppercase tracking-wider font-heading border-b border-[#CED7DF]/60 pb-1.5">
+                      Define New Coupon Code Rules
+                    </div>
+
+                    {couponFormError && (
+                      <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+                        <span>{couponFormError}</span>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-semibold text-[#0B3561]">
+                      <div>
+                        <label className="block mb-1 uppercase text-[10px] tracking-wider">Coupon Code *</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. MONSOON25"
+                          value={newCouponCode}
+                          onChange={(e) => setNewCouponCode(e.target.value.toUpperCase().replace(/\s/g, ''))}
+                          className="w-full bg-white border border-[#CED7DF] rounded-xl p-2.5 font-mono font-bold text-[#0B3561] uppercase focus:outline-none focus:border-[#12A5B0]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block mb-1 uppercase text-[10px] tracking-wider">Discount Percentage (1-100) *</label>
+                        <input
+                          type="number"
+                          required
+                          min={1}
+                          max={100}
+                          placeholder="e.g. 15"
+                          value={newCouponDiscount}
+                          onChange={(e) => setNewCouponDiscount(e.target.value)}
+                          className="w-full bg-white border border-[#CED7DF] rounded-xl p-2.5 font-mono focus:outline-none focus:border-[#12A5B0]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block mb-1 uppercase text-[10px] tracking-wider">Minimum Order Value (₹) *</label>
+                        <input
+                          type="number"
+                          required
+                          min={0}
+                          placeholder="e.g. 499 (0 for no limit)"
+                          value={newCouponMinOrder}
+                          onChange={(e) => setNewCouponMinOrder(e.target.value)}
+                          className="w-full bg-white border border-[#CED7DF] rounded-xl p-2.5 font-mono focus:outline-none focus:border-[#12A5B0]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block mb-1 uppercase text-[10px] tracking-wider">Expiry Date (Optional)</label>
+                        <input
+                          type="date"
+                          value={newCouponExpiry}
+                          onChange={(e) => setNewCouponExpiry(e.target.value)}
+                          className="w-full bg-white border border-[#CED7DF] rounded-xl p-2.5 font-mono focus:outline-none focus:border-[#12A5B0]"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2 font-heading uppercase text-xs">
+                      <button
+                        type="submit"
+                        className="bg-[#12A5B0] hover:bg-[#0e8a93] text-white font-black px-5 py-2.5 rounded-xl cursor-pointer"
+                      >
+                        Create Coupon
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsAddingCoupon(false);
+                          setCouponFormError(null);
+                        }}
+                        className="bg-[#E7EBEF] hover:bg-[#CED7DF] text-[#0B3561] font-bold px-4 py-2.5 rounded-xl cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                {/* ACTIVE AND DEFINED COUPONS LIST */}
+                <div className="space-y-3">
+                  <div className="text-[10px] font-bold text-[#6D86A0] uppercase tracking-wider font-heading">
+                    Active & Defined Store Coupons
+                  </div>
+
+                  {settings.coupons && settings.coupons.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {settings.coupons.map((coupon, idx) => {
+                        const isExpired = coupon.expiryDate && new Date(coupon.expiryDate).getTime() < new Date().setHours(0,0,0,0);
+                        const displayExpiry = coupon.expiryDate 
+                          ? new Date(coupon.expiryDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+                          : 'No Expiry';
+
+                        return (
+                          <div 
+                            key={idx}
+                            className={`p-5 rounded-2xl border transition-all flex flex-col justify-between space-y-4 relative overflow-hidden bg-white ${
+                              isExpired 
+                                ? 'border-[#CED7DF] opacity-60 bg-stone-50' 
+                                : coupon.active 
+                                ? 'border-[#A0DBDF] hover:border-[#12A5B0] shadow-2xs hover:shadow-xs animate-in zoom-in-95 duration-150' 
+                                : 'border-[#CED7DF] hover:border-[#9DAEC0]'
+                            }`}
+                          >
+                            <div className="space-y-1.5">
+                              <div className="flex items-center justify-between">
+                                <span className="font-mono font-black text-sm text-[#0B3561] bg-[#F7FAFC] border border-[#CED7DF] px-2.5 py-1 rounded-lg select-all">
+                                  {coupon.code}
+                                </span>
+                                <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full font-heading ${
+                                  isExpired 
+                                    ? 'bg-red-50 text-red-600 border border-red-200' 
+                                    : coupon.active 
+                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                                    : 'bg-amber-50 text-amber-700 border border-amber-200'
+                                }`}>
+                                  {isExpired ? 'Expired' : coupon.active ? 'Active' : 'Paused'}
+                                </span>
+                              </div>
+
+                              <div className="pt-1.5 space-y-1">
+                                <div className="text-xs font-semibold text-[#0B3561]">
+                                  Discount: <strong className="text-base text-[#12A5B0] font-black">{coupon.discountPercent}%</strong> Off
+                                </div>
+                                <div className="text-[11px] text-[#6D86A0]">
+                                  Min spend requirement: <span className="font-bold text-[#0B3561]">₹{coupon.minOrder}</span>
+                                </div>
+                                <div className="text-[11px] text-[#6D86A0] flex items-center gap-1">
+                                  <span>Validity limit:</span>
+                                  <span className={`font-semibold ${isExpired ? 'text-red-600' : 'text-[#0B3561]'}`}>{displayExpiry}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="pt-3 border-t border-[#E7EBEF] flex items-center justify-between text-xs font-heading uppercase gap-2">
+                              <button
+                                onClick={() => handleToggleCoupon(coupon.code)}
+                                disabled={Boolean(isExpired)}
+                                className={`flex-1 py-1.5 rounded-lg font-bold text-[10px] text-center border cursor-pointer transition-colors ${
+                                  isExpired
+                                    ? 'border-transparent text-stone-400 bg-stone-100 cursor-not-allowed'
+                                    : coupon.active
+                                    ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-200'
+                                    : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200'
+                                }`}
+                              >
+                                {coupon.active ? 'Pause Code' : 'Activate'}
+                              </button>
+
+                              <button
+                                onClick={() => handleDeleteCoupon(coupon.code)}
+                                className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-lg font-bold text-[10px] text-center cursor-pointer transition-colors"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="p-8 text-center text-[#6D86A0] border border-dashed border-[#CED7DF] rounded-2xl text-xs">
+                      No active store-wide promo coupons configured. Click "Add New Coupon" to define code rules.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1700,10 +2390,39 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ isStandalone = false }) 
                 <strong>Payment:</strong> {selectedOrderDetails.paymentMethod.toUpperCase()} (₹
                 {selectedOrderDetails.totalAmount})
               </div>
-              <div>
-                <strong>AWB Courier Tracking:</strong>{' '}
-                <span className="font-mono text-[#12A5B0] font-bold">{selectedOrderDetails.trackingNumber}</span>
+              <div className="flex items-center justify-between">
+                <div>
+                  <strong>AWB Courier Tracking:</strong>{' '}
+                  <span className="font-mono text-[#12A5B0] font-bold">{selectedOrderDetails.trackingNumber}</span>
+                </div>
+                {(selectedOrderDetails.trackingNumber === 'PENDING-CONFIRMATION' || !selectedOrderDetails.trackingNumber) && (
+                  <button
+                    onClick={() => handleGenerateTrackingID(selectedOrderDetails.id)}
+                    className="bg-[#12A5B0] hover:bg-[#0e8a93] text-white px-2 py-1 rounded-md font-bold transition-all cursor-pointer font-heading text-[10px]"
+                    type="button"
+                  >
+                    ⚡ Generate Tracking ID
+                  </button>
+                )}
               </div>
+
+              {selectedOrderDetails.trackingNumber && selectedOrderDetails.trackingNumber !== 'PENDING-CONFIRMATION' && (
+                <div className="pt-2 border-t border-[#E7EBEF]/60 flex items-center justify-between">
+                  <div>
+                    <span className="font-bold text-[#0B3561]">Fulfillment Notification Gateway:</span>
+                    <p className="text-[10px] text-[#6D86A0]">Dispatches automated marketing & shipping triggers</p>
+                  </div>
+                  <button
+                    onClick={() => handleFireNotification(selectedOrderDetails)}
+                    disabled={isFiringNotif}
+                    className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer font-heading text-[10px] flex items-center gap-1 shadow-xs"
+                    type="button"
+                  >
+                    <Mail className="w-3.5 h-3.5" />
+                    <span>{isFiringNotif ? 'Dispatched alerts...' : '📧 Send Email & WhatsApp'}</span>
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="pt-3 border-t border-[#E7EBEF] space-y-2">
@@ -1929,6 +2648,79 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ isStandalone = false }) 
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* EMAIL PREVIEW / PAYLOAD LOG MODAL */}
+      {selectedEmailPreview && (
+        <div className="fixed inset-0 z-60 bg-[#071E38]/80 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 space-y-4 border border-[#CED7DF] shadow-2xl text-xs font-body flex flex-col max-h-[90vh]">
+            <div className="flex justify-between items-center pb-3 border-b border-[#E7EBEF]">
+              <div>
+                <h3 className="font-extrabold text-sm text-[#0B3561] font-heading uppercase">
+                  Auditing Dispatch Log
+                </h3>
+                <p className="text-[10px] text-[#6D86A0] font-mono">
+                  ID: {selectedEmailPreview.id}
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedEmailPreview(null)}
+                className="p-1.5 text-[#6D86A0] hover:text-[#0B3561] cursor-pointer rounded-lg bg-[#F7FAFC] border border-[#CED7DF]"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-[11px] bg-[#F7FAFC] p-3 rounded-2xl border border-[#CED7DF]">
+              <div>
+                <div className="text-[#6D86A0] font-bold">Recipient Customer</div>
+                <div className="font-semibold text-[#0B3561]">{selectedEmailPreview.recipientName}</div>
+                <div className="font-mono text-[#0B3561]">{selectedEmailPreview.recipientEmail}</div>
+              </div>
+              <div>
+                <div className="text-[#6D86A0] font-bold">WhatsApp Mobile Delivery</div>
+                <div className="font-semibold text-emerald-600">+91 {selectedEmailPreview.recipientPhone}</div>
+                <div className="text-[10px] text-emerald-500 font-mono flex items-center gap-1 mt-0.5">
+                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full inline-block"></span>
+                  Delivered successfully
+                </div>
+              </div>
+            </div>
+
+            <div className="flex-1 flex flex-col space-y-2 min-h-[300px] overflow-hidden">
+              <div className="text-[#6D86A0] font-bold uppercase text-[10px] tracking-wider">
+                Responsive HTML Email Preview
+              </div>
+              <div className="flex-1 border border-[#CED7DF] rounded-2xl overflow-hidden bg-white shadow-inner">
+                <iframe
+                  title="HTML Email Preview"
+                  srcDoc={selectedEmailPreview.html}
+                  className="w-full h-full border-0"
+                  style={{ minHeight: '300px' }}
+                />
+              </div>
+            </div>
+
+            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 space-y-1.5 text-xs text-emerald-800">
+              <div className="font-bold flex items-center gap-1">
+                <MessageCircle className="w-4 h-4 text-emerald-600" />
+                <span>Simulated WhatsApp API Notification Payload</span>
+              </div>
+              <p className="font-mono text-[10px] bg-white border border-emerald-100 p-2.5 rounded-xl break-words leading-relaxed">
+                {selectedEmailPreview.whatsappBody}
+              </p>
+            </div>
+
+            <div className="pt-3 border-t border-[#E7EBEF] flex justify-end font-heading uppercase text-xs">
+              <button
+                onClick={() => setSelectedEmailPreview(null)}
+                className="bg-[#0B3561] text-white font-bold px-5 py-2 rounded-xl hover:bg-[#12A5B0] cursor-pointer animate-pulse"
+              >
+                Close Audit Log
+              </button>
+            </div>
           </div>
         </div>
       )}

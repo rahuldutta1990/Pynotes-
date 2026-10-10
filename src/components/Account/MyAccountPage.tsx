@@ -48,12 +48,14 @@ export const MyAccountPage: React.FC = () => {
     setIsTrackingModalOpen,
     setActiveOrderForInvoice,
     setIsReportIssueModalOpen,
-    showToast
+    showToast,
+    handleFetchLiveTracking
   } = useStore();
 
   const [activeTab, setActiveTab] = useState<'orders' | 'address' | 'profile'>('orders');
   const [isEditingAddress, setIsEditingAddress] = useState(false);
   const [addressError, setAddressError] = useState<string | null>(null);
+  const [expandedOrderTrackId, setExpandedOrderTrackId] = useState<string | null>(null);
 
   // Address Form State
   const [addressForm, setAddressForm] = useState<ShippingAddress>(() => {
@@ -195,8 +197,8 @@ export const MyAccountPage: React.FC = () => {
   };
 
   const handleTrackClick = (order: any) => {
+    setExpandedOrderTrackId((prev) => (prev === order.id ? null : order.id));
     setActiveOrderForTracking(order);
-    setIsTrackingModalOpen(true);
   };
 
   const handleInvoiceClick = (order: any) => {
@@ -385,6 +387,22 @@ export const MyAccountPage: React.FC = () => {
             {customerOrders.length > 0 ? (
               customerOrders.map((order) => {
                 const isPaid = order.paymentStatus === 'paid';
+                const steps = [
+                  { label: 'Order Placed', desc: 'Received & verified in PyNotes system' },
+                  { label: 'Confirmed & Invoiced', desc: 'Verified & GST tax invoice generated' },
+                  { label: 'Picked Up by Courier', desc: 'Handed to Delhivery / Blue Dart logistics' },
+                  { label: 'In Transit Hubs', desc: 'Fast movement across transit hubs' },
+                  { label: 'Out for Delivery', desc: 'Courier delivery executive on route' },
+                  { label: 'Delivered at Doorstep', desc: '48-hour free replacement guarantee begins' }
+                ];
+                let currentStepIdx = 1;
+                if (order.status === 'Completed or Shipped') {
+                  currentStepIdx = 5; // Delivered
+                } else if (order.status === 'Processing') {
+                  currentStepIdx = order.codConfirmed || order.paymentMethod === 'prepaid' ? 2 : 1;
+                } else if (order.status === 'Cancelled' || order.status === 'Refunded') {
+                  currentStepIdx = 0;
+                }
                 return (
                   <div
                     key={order.id}
@@ -507,6 +525,115 @@ export const MyAccountPage: React.FC = () => {
                         </button>
                       </div>
                     </div>
+
+                    {/* Collapsible Real-Time Live Tracking Dashboard Panel */}
+                    {expandedOrderTrackId === order.id && (
+                      <div className="mt-4 pt-4 border-t border-[#E7EBEF] space-y-4 animate-in slide-in-from-top-3 duration-250">
+                        <div className="bg-[#F7FAFC] rounded-2xl p-4 border border-[#CED7DF] space-y-4 text-xs">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#CED7DF]/60">
+                            <div className="flex items-center gap-2">
+                              <Truck className="w-4 h-4 text-[#12A5B0]" />
+                              <span className="font-extrabold text-[#0B3561] font-heading uppercase text-[10px] tracking-wider">
+                                Live Courier Status Dashboard (Shiprocket Partner)
+                              </span>
+                            </div>
+                            <div className="text-[11px] font-mono text-[#6D86A0] flex items-center gap-2">
+                              <span>AWB Waybill: <strong className="text-[#12A5B0]">{order.trackingNumber || 'PENDING'}</strong></span>
+                              {order.trackingNumber && order.trackingNumber !== 'PENDING-CONFIRMATION' && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleFetchLiveTracking(order.id)}
+                                  className="p-1 px-2 rounded-lg bg-white border border-[#CED7DF] hover:border-[#12A5B0] text-[#0B3561] hover:text-[#12A5B0] font-extrabold text-[9px] transition-all flex items-center gap-1 cursor-pointer font-heading uppercase"
+                                  title="Sync live status with Delhivery or Shiprocket servers"
+                                >
+                                  <RefreshCw className="w-3 h-3" />
+                                  <span>Sync Live</span>
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-1">
+                            {/* Visual Progress Steps */}
+                            <div className="space-y-3">
+                              <div className="text-[10px] font-bold text-[#0B3561] uppercase tracking-wider font-heading">
+                                Fulfillment Tracker Progress
+                              </div>
+                              <div className="relative pl-6 space-y-5 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-[#CED7DF]">
+                                {steps.map((step, idx) => {
+                                  const isDone = idx <= currentStepIdx;
+                                  const isCurrent = idx === currentStepIdx;
+                                  return (
+                                    <div key={idx} className="relative flex items-start gap-2.5 text-xs">
+                                      <div
+                                        className={`absolute -left-6 w-5 h-5 rounded-full flex items-center justify-center ring-4 ring-[#F7FAFC] transition-all ${
+                                          isDone
+                                            ? 'bg-[#12A5B0] text-white'
+                                            : 'bg-[#E7EBEF] text-[#6D86A0]'
+                                        }`}
+                                      >
+                                        {isDone ? (
+                                          <Check className="w-3 h-3 stroke-[3]" />
+                                        ) : (
+                                          <span className="w-1.5 h-1.5 rounded-full bg-[#9DAEC0]"></span>
+                                        )}
+                                      </div>
+                                      <div>
+                                        <div
+                                          className={`font-bold font-heading text-[11px] ${
+                                            isCurrent
+                                              ? 'text-[#12A5B0] font-black'
+                                              : isDone
+                                              ? 'text-[#0B3561]'
+                                              : 'text-[#9DAEC0]'
+                                          }`}
+                                        >
+                                          {step.label}
+                                        </div>
+                                        <div className="text-[10px] text-[#6D86A0]">{step.desc}</div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* Checkpoint Logs */}
+                            <div className="space-y-3">
+                              <div className="text-[10px] font-bold text-[#0B3561] uppercase tracking-wider font-heading">
+                                Courier Checkpoint Activity Logs
+                              </div>
+                              {order.trackingEvents && order.trackingEvents.length > 0 ? (
+                                <div className="space-y-2 max-h-[250px] overflow-y-auto pr-1">
+                                  {order.trackingEvents.map((ev, i) => (
+                                    <div key={i} className="bg-white p-2.5 rounded-xl border border-[#CED7DF]/60 space-y-1">
+                                      <div className="flex justify-between items-center text-[10px] font-mono">
+                                        <span className="font-bold text-[#12A5B0] bg-[#DDF3F4] px-1.5 py-0.5 rounded uppercase">
+                                          {ev.status}
+                                        </span>
+                                        <span className="text-[#9DAEC0]">{ev.timestamp}</span>
+                                      </div>
+                                      <p className="text-[11px] text-[#3C5D81] font-medium leading-relaxed">
+                                        {ev.note}
+                                      </p>
+                                      {ev.location && (
+                                        <div className="text-[10px] text-[#6D86A0] font-mono">
+                                          📍 {ev.location}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="p-4 bg-white rounded-xl border border-dashed border-[#CED7DF] text-center text-[11px] text-[#6D86A0]">
+                                  No logistics checkpoints logged yet. Once dispatched via Shiprocket, progress updates from Delhivery or Blue Dart will appear here in real-time.
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })
