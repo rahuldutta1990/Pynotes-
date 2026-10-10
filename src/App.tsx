@@ -10,6 +10,8 @@ import { TrustTicker } from './components/TrustTicker';
 import { Hero } from './components/Hero';
 import { ComparisonSection } from './components/ComparisonSection';
 import { ProductCatalog } from './components/ProductCatalog';
+import { RecommendedProducts } from './components/RecommendedProducts';
+import { FAQSection } from './components/FAQSection';
 import { ProductDetailsPage } from './components/ProductDetailsPage';
 import { CartDrawer } from './components/CartDrawer';
 import { CheckoutModal } from './components/CheckoutModal';
@@ -55,6 +57,8 @@ const MainStorefront: React.FC = () => {
             <TrustTicker />
             <ComparisonSection />
             <ProductCatalog />
+            <RecommendedProducts />
+            <FAQSection />
           </>
         )}
       </main>
