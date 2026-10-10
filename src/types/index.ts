@@ -167,6 +167,7 @@ export interface UserProfile {
   phone?: string;
   role: 'customer' | 'admin';
   savedAddress?: ShippingAddress;
+  wishlist: string[];
   createdAt: string;
 }
 

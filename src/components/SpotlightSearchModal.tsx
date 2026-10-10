@@ -131,11 +131,11 @@ export const SpotlightSearchModal: React.FC = () => {
 
   return (
     <div
-      className="fixed inset-0 z-50 overflow-y-auto bg-[#071E38]/60 backdrop-blur-md flex items-start justify-center pt-[8vh] sm:pt-[12vh] px-3 sm:px-4 animate-in fade-in duration-150 font-body"
+      className="fixed inset-0 z-50 overflow-y-auto bg-[#071E38]/60 backdrop-blur-md flex items-start justify-center pt-[8vh] sm:pt-[12vh] p-4 animate-in fade-in duration-150 font-body"
       onClick={closeSpotlight}
     >
       <div
-        className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl border border-[#CED7DF] overflow-hidden flex flex-col relative animate-in zoom-in-95 duration-150"
+        className="bg-white rounded-3xl w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-2xl border border-[#CED7DF]/50 ring-1 ring-black/5 relative flex flex-col animate-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Apple Spotlight Search Input Bar */}

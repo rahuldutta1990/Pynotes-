@@ -11,7 +11,7 @@ import {
   runTransaction
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase/config';
-import { Product, Order, SiteSettings, Review, IssueReport, CartItem, OrderStatus, ShippingAddress, PaymentMethod } from '../types';
+import { Product, Order, SiteSettings, Review, IssueReport, CartItem, OrderStatus, ShippingAddress, PaymentMethod, UserProfile } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_SITE_SETTINGS, INITIAL_REVIEWS, INITIAL_ORDERS } from '../data/initialCatalog';
 import { sendAutomatedEmail } from './emailService';
 import { trackCourierShipment } from './courierService';
@@ -531,5 +531,13 @@ export async function resetDemoStoreData(): Promise<void> {
     }
   } catch (error) {
     console.error('Reset error:', error);
+  }
+}
+export async function updateUserProfileInFirestore(userId: string, updates: Partial<UserProfile>) {
+  try {
+    const userRef = doc(db, 'users', userId);
+    await updateDoc(userRef, updates as any);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `users/${userId}`);
   }
 }

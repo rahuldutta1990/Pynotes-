@@ -22,6 +22,8 @@ import {
   validatePassword
 } from '../utils/validation';
 
+import { useModalClose } from '../hooks/useModalClose';
+
 export const AuthModal: React.FC = () => {
   const {
     isAuthModalOpen,
@@ -32,6 +34,8 @@ export const AuthModal: React.FC = () => {
     signupUser,
     showToast
   } = useStore();
+
+  useModalClose(isAuthModalOpen, closeAuthModal);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -122,8 +126,11 @@ export const AuthModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-60 bg-[#071E38]/80 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200 font-body">
-      <div className="bg-[#F7FAFC] rounded-3xl max-w-md w-full border border-[#CED7DF] shadow-2xl overflow-hidden relative">
+    <div 
+      className="fixed inset-0 z-60 bg-[#071E38]/80 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200 font-body"
+      onClick={(e) => { if (e.target === e.currentTarget) closeAuthModal(); }}
+    >
+      <div className="bg-white rounded-3xl max-w-sm w-full border border-[#CED7DF]/50 shadow-2xl ring-1 ring-black/5 overflow-hidden relative">
         {/* Subtle Ruled paper background effect */}
         <div className="absolute inset-0 bg-ruled-paper opacity-40 pointer-events-none"></div>
 

@@ -24,7 +24,8 @@ import {
   addProductReview,
   submitIssueReport,
   resetDemoStoreData,
-  fetchLiveTrackingEvents
+  fetchLiveTrackingEvents,
+  updateUserProfileInFirestore
 } from '../services/storeService';
 import { INITIAL_PRODUCTS, INITIAL_SITE_SETTINGS, INITIAL_REVIEWS, INITIAL_ORDERS } from '../data/initialCatalog';
 import { trackCourierShipment } from '../services/courierService';
@@ -55,6 +56,9 @@ interface StoreContextType {
   isCheckoutModalOpen: boolean;
   openCheckout: () => void;
   closeCheckout: () => void;
+  isQuickViewModalOpen: boolean;
+  openQuickView: (product: Product) => void;
+  closeQuickView: () => void;
   activeOrderForSuccess: Order | null;
   setActiveOrderForSuccess: (order: Order | null) => void;
   activeOrderForTracking: Order | null;
@@ -77,6 +81,8 @@ interface StoreContextType {
   // User Authentication & Customer Account Session
   currentUser: UserProfile | null;
   userSession: UserSession | null;
+  wishlist: string[];
+  toggleWishlist: (productId: string) => void;
   isAuthModalOpen: boolean;
   authModalTab: 'login' | 'signup';
   openAuthModal: (tab?: 'login' | 'signup') => void;
@@ -147,6 +153,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedProductForModal, setSelectedProductForModal] = useState<Product | null>(null);
   const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
+  const [isQuickViewModalOpen, setIsQuickViewModalOpen] = useState(false);
+  const [selectedProductForQuickView, setSelectedProductForQuickView] = useState<Product | null>(null);
   const [activeOrderForSuccess, setActiveOrderForSuccess] = useState<Order | null>(null);
   const [activeOrderForTracking, setActiveOrderForTracking] = useState<Order | null>(null);
   const [activeOrderForInvoice, setActiveOrderForInvoice] = useState<Order | null>(null);
@@ -222,8 +230,30 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     return null;
   });
 
+  const [wishlist, setWishlist] = useState<string[]>(() => currentUser?.wishlist || []);
+  useEffect(() => {
+    setWishlist(currentUser?.wishlist || []);
+  }, [currentUser]);
+
+
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalTab, setAuthModalTab] = useState<'login' | 'signup'>('login');
+
+  const toggleWishlist = async (productId: string) => {
+    if (!currentUser) {
+      openAuthModal('login');
+      return;
+    }
+    const newWishlist = wishlist.includes(productId)
+      ? wishlist.filter((id) => id !== productId)
+      : [...wishlist, productId];
+      
+    setWishlist(newWishlist);
+    await updateUserProfile({ wishlist: newWishlist });
+    await updateUserProfileInFirestore(currentUser.id, { wishlist: newWishlist });
+    showToast(wishlist.includes(productId) ? 'Removed from wishlist' : 'Added to wishlist');
+  };
+
 
   // Dedicated Admin Authentication & Session State
   const [adminSession, setAdminSession] = useState<AdminSession | null>(() => {
@@ -465,6 +495,7 @@ const getProductFromSlug = (slug: string, productsList: Product[]) => {
       name: email.split('@')[0].replace('.', ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
       email: email.trim(),
       role: 'customer',
+      wishlist: [],
       createdAt: new Date().toISOString()
     };
 
@@ -513,6 +544,7 @@ const getProductFromSlug = (slug: string, productsList: Product[]) => {
       email: email.trim(),
       phone: cleanPhone,
       role: 'customer',
+      wishlist: [],
       createdAt: new Date().toISOString()
     };
 
@@ -750,6 +782,15 @@ const getProductFromSlug = (slug: string, productsList: Product[]) => {
   };
   const closeCheckout = () => setIsCheckoutModalOpen(false);
 
+  const openQuickView = (product: Product) => {
+    setSelectedProductForQuickView(product);
+    setIsQuickViewModalOpen(true);
+  };
+  const closeQuickView = () => {
+    setIsQuickViewModalOpen(false);
+    setSelectedProductForQuickView(null);
+  };
+
   // Financial calculations
   const totalCartItems = cart.reduce((acc, i) => acc + i.quantity, 0);
   const cartSubtotal = cart.reduce((acc, i) => acc + i.product.salePrice * i.quantity, 0);
@@ -909,6 +950,9 @@ const getProductFromSlug = (slug: string, productsList: Product[]) => {
         isCheckoutModalOpen,
         openCheckout,
         closeCheckout,
+        isQuickViewModalOpen,
+        openQuickView,
+        closeQuickView,
         activeOrderForSuccess,
         setActiveOrderForSuccess,
         activeOrderForTracking,
@@ -930,6 +974,8 @@ const getProductFromSlug = (slug: string, productsList: Product[]) => {
         showToast,
         currentUser,
         userSession,
+        wishlist,
+        toggleWishlist,
         isAuthModalOpen,
         authModalTab,
         openAuthModal,

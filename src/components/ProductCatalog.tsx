@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useStore } from '../context/StoreContext';
 import { ProductCard } from './ProductCard';
+import { QuickViewModal } from './QuickViewModal';
 import { BookOpen, SlidersHorizontal, SearchX } from 'lucide-react';
 
 export const ProductCatalog: React.FC = () => {
@@ -150,6 +151,8 @@ export const ProductCatalog: React.FC = () => {
           </button>
         </div>
       )}
+      {/* Quick View Modal */}
+      <QuickViewModal />
     </section>
   );
 };

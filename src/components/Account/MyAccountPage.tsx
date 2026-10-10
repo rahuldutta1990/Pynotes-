@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useStore } from '../../context/StoreContext';
 import { BrandLogo } from '../BrandLogo';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 import {
   ArrowLeft,
   Package,
@@ -21,7 +23,8 @@ import {
   AlertCircle,
   ShieldCheck,
   KeyRound,
-  RefreshCw
+  RefreshCw,
+  Heart
 } from 'lucide-react';
 import { ShippingAddress } from '../../types';
 import {
@@ -49,10 +52,11 @@ export const MyAccountPage: React.FC = () => {
     setActiveOrderForInvoice,
     setIsReportIssueModalOpen,
     showToast,
-    handleFetchLiveTracking
+    handleFetchLiveTracking,
+    wishlist
   } = useStore();
 
-  const [activeTab, setActiveTab] = useState<'orders' | 'address' | 'profile'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'address' | 'profile' | 'wishlist'>('orders');
   const [isEditingAddress, setIsEditingAddress] = useState(false);
   const [addressError, setAddressError] = useState<string | null>(null);
   const [expandedOrderTrackId, setExpandedOrderTrackId] = useState<string | null>(null);
@@ -208,6 +212,18 @@ export const MyAccountPage: React.FC = () => {
   const handleReportClaimClick = (order: any) => {
     setActiveOrderForTracking(order);
     setIsReportIssueModalOpen(true);
+  };
+
+  const handleDownloadPDF = (order: any) => {
+    const doc = new jsPDF();
+    doc.setFontSize(18);
+    doc.text(`PyNotes Order Receipt`, 10, 20);
+    doc.setFontSize(12);
+    doc.text(`Order Number: ${order.orderNumber}`, 10, 30);
+    doc.text(`Date: ${new Date(order.createdAt).toLocaleDateString()}`, 10, 40);
+    doc.text(`Total Amount: ₹${order.totalAmount.toLocaleString('en-IN')}`, 10, 50);
+    
+    doc.save(`receipt_${order.orderNumber}.pdf`);
   };
 
   return (
@@ -367,6 +383,17 @@ export const MyAccountPage: React.FC = () => {
             <MapPin className="w-4 h-4 text-[#12A5B0]" />
             <span>Saved Shipping Address</span>
           </button>
+          <button
+            onClick={() => setActiveTab('wishlist')}
+            className={`pb-2 px-3 border-b-2 transition-all cursor-pointer flex items-center gap-2 ${
+              activeTab === 'wishlist'
+                ? 'border-[#12A5B0] text-[#0B3561] font-black'
+                : 'border-transparent text-[#6D86A0] hover:text-[#0B3561]'
+            }`}
+          >
+            <Heart className="w-4 h-4 text-[#12A5B0]" />
+            <span>Wishlist ({wishlist.length})</span>
+          </button>
 
           <button
             onClick={() => setActiveTab('profile')}
@@ -513,6 +540,15 @@ export const MyAccountPage: React.FC = () => {
                         >
                           <FileText className="w-3.5 h-3.5 text-[#0B3561]" />
                           <span>GST Tax Invoice</span>
+                        </button>
+                        
+                        {/* Download PDF button */}
+                        <button
+                          onClick={() => handleDownloadPDF(order)}
+                          className="bg-[#DDF3F4] hover:bg-[#c2ebed] text-[#12A5B0] font-bold px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer font-heading"
+                        >
+                          <FileText className="w-3.5 h-3.5 text-[#12A5B0]" />
+                          <span>PDF Receipt</span>
                         </button>
 
                         {/* 48h issue claim */}
@@ -820,6 +856,24 @@ export const MyAccountPage: React.FC = () => {
           </div>
         )}
 
+        {/* TAB 4: WISHLIST */}
+        {activeTab === 'wishlist' && (
+          <div className="bg-white rounded-3xl border border-[#CED7DF] p-6 sm:p-8 shadow-xs">
+            <h3 className="text-base font-extrabold text-[#0B3561] font-heading mb-4">Saved for Later</h3>
+            {wishlist.length === 0 ? (
+              <div className="text-center py-12 text-[#6D86A0] text-xs">
+                Your wishlist is empty. Explore our catalog to add books!
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {products.filter(p => wishlist.includes(p.id)).map(p => (
+                   <ProductCard key={p.id} product={p} />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        
         {/* TAB 3: STUDENT PROFILE & SESSION SECURITY (Comprehensive Session Management) */}
         {activeTab === 'profile' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

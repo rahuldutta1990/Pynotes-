@@ -1,14 +1,15 @@
 import React from 'react';
+import { motion } from 'framer-motion';
 import { Product } from '../types';
 import { useStore } from '../context/StoreContext';
-import { ShoppingBag, Zap, Star, Layers, CheckCircle } from 'lucide-react';
+import { ShoppingBag, Zap, Star, Layers, CheckCircle, Heart } from 'lucide-react';
 
 interface ProductCardProps {
   product: Product;
 }
 
 export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
-  const { addToCart, setSelectedProductForModal, openCheckout, navigateTo } = useStore();
+  const { addToCart, setSelectedProductForModal, openCheckout, navigateTo, wishlist, toggleWishlist, openQuickView } = useStore();
 
   const isSoldOut = product.stockQuantity <= 0;
   const isLowStock = product.stockQuantity > 0 && product.stockQuantity <= 10;
@@ -30,11 +31,16 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   };
 
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      whileHover={{ scale: 1.02 }}
+      transition={{ duration: 0.2 }}
       onClick={() => {
         setSelectedProductForModal(product);
         navigateTo('product');
       }}
+      onMouseEnter={() => openQuickView(product)}
       className="group bg-white rounded-3xl border border-[#CED7DF] overflow-hidden shadow-2xs hover:shadow-xl hover:border-[#12A5B0] transition-all duration-200 flex flex-col cursor-pointer relative"
     >
       {/* Product Image / Mockup Container */}
@@ -69,8 +75,20 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
         )}
 
         {/* Pages badge */}
-        <div className="absolute top-3 right-3 bg-white/95 backdrop-blur-xs text-[#0B3561] text-[10px] font-bold px-2.5 py-0.5 rounded-full shadow-2xs font-mono">
-          {product.pages} pgs
+        <div className="absolute top-3 right-3 flex flex-col gap-2 items-end">
+          <div className="bg-white/95 backdrop-blur-xs text-[#0B3561] text-[10px] font-bold px-2.5 py-0.5 rounded-full shadow-2xs font-mono">
+            {product.pages} pgs
+          </div>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleWishlist(product.id);
+            }}
+            className="p-2 bg-white/90 backdrop-blur-xs rounded-full shadow-2xs border border-[#CED7DF] text-[#6D86A0] hover:text-red-500 transition-colors cursor-pointer"
+            aria-label="Toggle Wishlist"
+          >
+            <Heart className={`w-4 h-4 ${wishlist.includes(product.id) ? 'fill-red-500 text-red-500' : ''}`} />
+          </button>
         </div>
       </div>
 
@@ -159,6 +177,6 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
           </div>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 };

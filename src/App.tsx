@@ -24,6 +24,8 @@ import { AdminPanel } from './components/Admin/AdminPanel';
 import { AdminLoginPage } from './components/Admin/AdminLoginPage';
 import { MyAccountPage } from './components/Account/MyAccountPage';
 import { Footer } from './components/Footer';
+import { WhatsAppButton } from './components/WhatsAppButton';
+import { Chatbot } from './components/Chatbot';
 import { CheckCircle2 } from 'lucide-react';
 
 const ToastNotification: React.FC = () => {
@@ -112,10 +114,13 @@ const AppRouter: React.FC = () => {
   return <MainStorefront />;
 };
 
+
 export default function App() {
   return (
     <StoreProvider>
       <AppRouter />
+      <WhatsAppButton />
+      <Chatbot />
     </StoreProvider>
   );
 }

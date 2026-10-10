@@ -21,7 +21,8 @@ import {
   HelpCircle,
   Clock,
   ThumbsUp,
-  Award
+  Award,
+  Heart
 } from 'lucide-react';
 import { validatePincode, validateReview } from '../utils/validation';
 
@@ -36,7 +37,10 @@ export const ProductDetailsPage: React.FC = () => {
     currentUser,
     handleAddReview,
     showToast,
-    navigateTo
+    navigateTo,
+    wishlist,
+    toggleWishlist,
+    openAuthModal
   } = useStore();
 
   const product = selectedProductForModal;
@@ -648,6 +652,19 @@ export const ProductDetailsPage: React.FC = () => {
                 <Zap className="w-4 h-4 fill-white" />
                 <span>Buy Now</span>
               </button>
+
+              {/* Wishlist Button */}
+              <button
+                onClick={() => toggleWishlist(product.id)}
+                className={`p-4 rounded-xl border transition-all cursor-pointer ${
+                  wishlist.includes(product.id)
+                    ? 'bg-[#12A5B0]/10 border-[#12A5B0] text-[#12A5B0]'
+                    : 'bg-white border-[#CED7DF] hover:border-[#12A5B0] text-[#0B3561]'
+                }`}
+              >
+                <Heart className={`w-5 h-5 ${wishlist.includes(product.id) ? 'fill-[#12A5B0]' : ''}`} />
+              </button>
+
             </div>
 
             {/* Delivery/Quality Indicators below buy flow */}
@@ -986,6 +1003,70 @@ export const ProductDetailsPage: React.FC = () => {
             <div className="col-span-2 text-center py-10 text-[#9DAEC0] text-xs font-semibold">
               Be the first to review this book! Share your placement & exam prep feedback.
             </div>
+          )}
+        </div>
+      </div>
+      {/* 4. REVIEWS SECTION */}
+      <div className="mt-8 bg-white rounded-3xl border border-[#CED7DF] shadow-lg p-6 sm:p-10 font-body">
+        <h3 className="text-xl font-black text-[#0B3561] font-heading mb-6 flex items-center gap-2">
+          <Star className="w-5 h-5 text-[#FFD54A] fill-[#FFD54A]" />
+          Student Reviews ({productReviews.length})
+        </h3>
+
+        {/* Review Form */}
+        <div className="bg-[#F7FAFC] rounded-2xl p-6 border border-[#CED7DF] mb-8">
+          <h4 className="font-bold text-[#0B3561] mb-4">Write a Review</h4>
+          {currentUser ? (
+            <form onSubmit={handleSubmitReview} className="space-y-4">
+              <div className="flex items-center gap-2">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <Star
+                    key={star}
+                    className={`w-6 h-6 cursor-pointer ${star <= reviewRating ? 'fill-[#FFD54A] text-[#FFD54A]' : 'text-gray-300'}`}
+                    onClick={() => setReviewRating(star)}
+                  />
+                ))}
+              </div>
+              <textarea
+                className="w-full p-3 rounded-xl border border-[#CED7DF] text-xs focus:outline-hidden"
+                rows={3}
+                placeholder="Share your thoughts on this study guide..."
+                value={reviewComment}
+                onChange={(e) => setReviewComment(e.target.value)}
+              />
+              <button
+                type="submit"
+                className="bg-[#0B3561] hover:bg-[#071E38] text-white font-bold py-2 px-4 rounded-xl text-xs uppercase cursor-pointer"
+              >
+                Submit Review
+              </button>
+              {reviewError && <p className="text-red-500 text-xs">{reviewError}</p>}
+            </form>
+          ) : (
+            <p className="text-xs text-[#6D86A0]">Please log in to submit a review.</p>
+          )}
+        </div>
+
+        {/* Reviews List */}
+        <div className="space-y-6">
+          {productReviews.length > 0 ? (
+            productReviews.map((review) => (
+              <div key={review.id} className="border-b border-[#E7EBEF] pb-4 last:border-0">
+                <div className="flex justify-between items-center mb-1">
+                  <span className="font-bold text-[#0B3561] text-xs">{review.customerName}</span>
+                  <span className="text-[10px] text-[#9DAEC0]">{review.date}</span>
+                </div>
+                <div className="flex items-center gap-0.5 mb-1">
+                  {[...Array(5)].map((_, i) => (
+                    <Star key={i} className={`w-3 h-3 ${i < review.rating ? 'fill-[#FFD54A] text-[#FFD54A]' : 'text-gray-300'}`} />
+                  ))}
+                </div>
+                <p className="text-xs text-[#3C5D81] leading-relaxed">{review.comment}</p>
+                {review.college && <span className="text-[10px] text-[#12A5B0] font-bold mt-1 block">{review.college}</span>}
+              </div>
+            ))
+          ) : (
+            <p className="text-xs text-[#6D86A0]">No reviews yet. Be the first to review!</p>
           )}
         </div>
       </div>

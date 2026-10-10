@@ -15,7 +15,8 @@ import {
   Code,
   Sparkles,
   ShieldCheck,
-  Clock
+  Clock,
+  Heart
 } from 'lucide-react';
 
 export const Header: React.FC = () => {
@@ -35,7 +36,8 @@ export const Header: React.FC = () => {
     logoutUser,
     extendUserSession,
     navigateTo,
-    showToast
+    showToast,
+    wishlist
   } = useStore();
 
   const [currentAnnouncementIndex, setCurrentAnnouncementIndex] = useState(0);
@@ -263,6 +265,21 @@ export const Header: React.FC = () => {
               aria-label="Track Order"
             >
               <Truck className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-[#0B3561] group-hover:text-[#12A5B0] transition-colors" />
+            </button>
+
+            {/* 2b. Wishlist (ONLY ICON) */}
+            <button
+              onClick={() => navigateTo('account')}
+              className="relative p-2 sm:p-2.5 rounded-full border border-[#CED7DF] hover:border-[#12A5B0] bg-white hover:bg-[#DDF3F4] text-[#0B3561] hover:text-[#12A5B0] transition-all cursor-pointer shadow-2xs group shrink-0"
+              title="Wishlist"
+              aria-label="Wishlist"
+            >
+              <Heart className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-[#0B3561] group-hover:text-[#12A5B0] transition-colors" />
+              {wishlist.length > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 bg-[#12A5B0] text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center border-2 border-white">
+                  {wishlist.length}
+                </span>
+              )}
             </button>
 
             {/* 3. User Login / Student Session (ONLY ICON) */}

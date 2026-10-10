@@ -34,6 +34,8 @@ const INDIAN_STATES = [
   'Delhi NCR', 'Chandigarh', 'Puducherry', 'Jammu & Kashmir', 'Ladakh'
 ];
 
+import { useModalClose } from '../hooks/useModalClose';
+
 export const CheckoutModal: React.FC = () => {
   const {
     cart,
@@ -57,6 +59,8 @@ export const CheckoutModal: React.FC = () => {
     showToast,
     openAuthModal
   } = useStore();
+
+  useModalClose(isCheckoutModalOpen, closeCheckout);
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('prepaid');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -320,8 +324,11 @@ export const CheckoutModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-[#071E38]/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 lg:p-6 animate-in fade-in duration-200">
-      <div className="bg-white rounded-3xl max-w-4xl w-full max-h-[94vh] overflow-y-auto shadow-2xl border border-[#CED7DF] relative flex flex-col font-body">
+    <div 
+      className="fixed inset-0 z-50 overflow-y-auto bg-[#071E38]/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 lg:p-6 animate-in fade-in duration-200"
+      onClick={(e) => { if (e.target === e.currentTarget) closeCheckout(); }}
+    >
+      <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[85vh] overflow-y-auto shadow-2xl border border-[#CED7DF]/50 ring-1 ring-black/5 relative flex flex-col font-body">
         {/* Modal Header */}
         <div className="bg-[#0B3561] text-white p-5 sm:p-6 rounded-t-3xl flex items-center justify-between sticky top-0 z-20 shadow-xs">
           <div className="flex items-center gap-3">
